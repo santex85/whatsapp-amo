@@ -70,11 +70,36 @@ async function handleIncomingMessage(message: IncomingMessage): Promise<void> {
 // Обработчик исходящих сообщений (amoCRM → WhatsApp)
 async function handleOutgoingMessage(payload: AmoCRMWebhookPayload): Promise<void> {
   try {
-    logger.info({ accountId: payload.account_id, chatId: payload.chat_id }, '📤 Обработка исходящего сообщения');
+    logger.info({ 
+      accountId: payload.account_id, 
+      chatId: payload.chat_id,
+      messageLength: payload.message.content?.length || 0,
+      hasAttachments: !!payload.message.attachments?.length
+    }, '📤 Обработка исходящего сообщения от amoCRM');
+
+    // Проверяем, что WhatsApp аккаунт подключен
+    const accountStatus = manager.getAccountStatus(payload.account_id);
+    if (!accountStatus) {
+      logger.error({ accountId: payload.account_id }, '❌ WhatsApp аккаунт не найден');
+      throw new Error(`Account ${payload.account_id} not found. Please ensure WhatsApp account is connected.`);
+    }
+
+    if (!accountStatus.connected) {
+      logger.error({ accountId: payload.account_id }, '❌ WhatsApp аккаунт не подключен');
+      throw new Error(`Account ${payload.account_id} is not connected. Please scan QR code first.`);
+    }
 
     // Извлекаем номер телефона из chat_id (формат может быть разным)
     const phoneNumber = payload.chat_id;
     const to = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
+
+    logger.info({ 
+      accountId: payload.account_id, 
+      chatId: payload.chat_id,
+      phoneNumber,
+      to,
+      messagePreview: payload.message.content?.substring(0, 50) || ''
+    }, '📱 Подготовка к отправке сообщения в WhatsApp');
 
     // Постановка в очередь
     const queueMessage: QueueMessage = {
@@ -91,8 +116,20 @@ async function handleOutgoingMessage(payload: AmoCRMWebhookPayload): Promise<voi
     };
 
     await queue.enqueue('outgoing:queue', queueMessage);
+    
+    logger.info({ 
+      accountId: payload.account_id, 
+      to,
+      queueMessageId: queueMessage.id
+    }, '✅ Сообщение поставлено в очередь для отправки в WhatsApp');
   } catch (err) {
-    logger.error({ err }, 'Failed to queue outgoing message');
+    logger.error({ 
+      err, 
+      accountId: payload.account_id,
+      chatId: payload.chat_id,
+      errorMessage: err instanceof Error ? err.message : 'Unknown error'
+    }, '❌ Ошибка при постановке сообщения в очередь');
+    throw err; // Пробрасываем ошибку, чтобы она была обработана в route handler
   }
 }
 

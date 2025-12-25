@@ -6,6 +6,10 @@ export const config = {
   server: {
     port: parseInt(process.env.PORT || '3000', 10),
     nodeEnv: process.env.NODE_ENV || 'development',
+    domain: process.env.DOMAIN || 'localhost',
+    webhookBaseUrl: process.env.WEBHOOK_BASE_URL || process.env.DOMAIN 
+      ? `https://${process.env.DOMAIN}` 
+      : 'http://localhost:3000',
   },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',

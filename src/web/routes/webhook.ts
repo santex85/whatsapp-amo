@@ -7,6 +7,7 @@ export function createWebhookRoutes(
 ): Router {
   const router = Router();
 
+  // Существующий endpoint для webhook (через /api)
   router.post('/webhook/amocrm', (req, res) => {
     handleAmoCRMWebhook(req, res, onWebhookMessage);
   });

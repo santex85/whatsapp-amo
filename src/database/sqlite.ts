@@ -161,3 +161,16 @@ export function deleteAmoCRMTokens(accountId: string): void {
   database.prepare('DELETE FROM amocrm_tokens WHERE account_id = ?').run(accountId);
 }
 
+/**
+ * Находит account_id по scope_id
+ * @param scopeId - scope_id из amoCRM
+ * @returns account_id или null, если не найден
+ */
+export function getAccountIdByScopeId(scopeId: string): string | null {
+  const database = getDatabase();
+  const row = database.prepare(
+    'SELECT account_id FROM amocrm_tokens WHERE scope_id = ? LIMIT 1'
+  ).get(scopeId) as { account_id: string } | undefined;
+  return row?.account_id || null;
+}
+
