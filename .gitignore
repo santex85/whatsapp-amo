@@ -13,6 +13,7 @@ dist/
 # Storage
 storage/sessions/
 storage/media/
+storage/*.db
 storage/database/*.db
 storage/database/*.db-shm
 storage/database/*.db-wal
