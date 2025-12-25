@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+yarn.lock
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+
+# Storage
+storage/sessions/
+storage/media/
+storage/database/*.db
+storage/database/*.db-shm
+storage/database/*.db-wal
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Process files
+*.pid
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+
+# Technical documentation (development only)
+AMOCRM_CHANNEL_SETUP.md
+AMOCRM_INTEGRATION.md
+AMOCRM_MESSAGES.md
+CHANGELOG.md
+INSTALLATION.md
+TESTING.md
+TROUBLESHOOTING*.md
+
+# Development scripts
+check-messages.sh
+get-logs.sh
+monitor-logs.sh
+redirect-logs.sh
+SEND_TEST_MESSAGE.sh
+scripts/view-logs.sh
+test-logs.js

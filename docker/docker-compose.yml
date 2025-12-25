@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: whatsapp-amocrm-gateway
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - DB_PATH=/app/storage/database/sessions.db
+      - MEDIA_STORAGE_PATH=/app/storage/media
+      - AMOCRM_CLIENT_ID=${AMOCRM_CLIENT_ID}
+      - AMOCRM_CLIENT_SECRET=${AMOCRM_CLIENT_SECRET}
+      - AMOCRM_REDIRECT_URI=${AMOCRM_REDIRECT_URI:-http://localhost:3000/auth/amocrm/callback}
+      - AMOCRM_SUBDOMAIN=${AMOCRM_SUBDOMAIN}
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      - redis
+    networks:
+      - gateway-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: whatsapp-amocrm-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - gateway-network
+    command: redis-server --appendonly yes
+
+volumes:
+  redis-data:
+
+networks:
+  gateway-network:
+    driver: bridge
+

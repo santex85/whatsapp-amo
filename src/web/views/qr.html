@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp QR Code - Account {{accountId}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        .account-id {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .qr-container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: inline-block;
+        }
+        .qr-container img {
+            max-width: 100%;
+            height: auto;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .status.waiting {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .qr-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+            color: #999;
+        }
+        .qr-placeholder svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+        .instructions {
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .refresh-btn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        .refresh-btn:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WhatsApp Авторизация</h1>
+        <div class="account-id">Account ID: {{accountId}}</div>
+        
+        <div class="qr-container">
+            <div id="qrPlaceholder" class="qr-placeholder" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+                <p>Ожидание QR-кода...</p>
+            </div>
+            <img id="qrImage" src="" alt="QR Code" style="display: none;" onerror="handleQRImageError()" onload="handleQRImageLoad()">
+        </div>
+        
+        <div id="status" class="status loading">
+            Инициализация подключения...
+        </div>
+        
+        <div class="instructions">
+            <p>1. Откройте WhatsApp на вашем телефоне</p>
+            <p>2. Нажмите Меню → Связанные устройства</p>
+            <p>3. Нажмите "Связать устройство"</p>
+            <p>4. Отсканируйте QR-код выше</p>
+        </div>
+        
+        <button class="refresh-btn" onclick="refreshQR()">Обновить QR-код</button>
+    </div>
+
+    <script>
+        const accountId = '{{accountId}}';
+        let checkInterval;
+        let qrCheckInterval;
+
+        function handleQRImageError() {
+            const img = document.getElementById('qrImage');
+            const placeholder = document.getElementById('qrPlaceholder');
+            img.style.display = 'none';
+            placeholder.style.display = 'flex';
+            checkQRCode();
+        }
+
+        function handleQRImageLoad() {
+            const img = document.getElementById('qrImage');
+            const placeholder = document.getElementById('qrPlaceholder');
+            img.style.display = 'block';
+            placeholder.style.display = 'none';
+        }
+
+        function loadQRCode() {
+            fetch('/api/qr/' + accountId + '/data')
+                .then(res => {
+                    if (res.ok) {
+                        return res.json();
+                    } else {
+                        return res.json().then(data => {
+                            throw new Error(data.error || 'QR code not available');
+                        });
+                    }
+                })
+                .then(data => {
+                    if (data.qr) {
+                        const img = document.getElementById('qrImage');
+                        img.src = '/api/qr/' + accountId + '?t=' + Date.now();
+                        const statusDiv = document.getElementById('status');
+                        statusDiv.className = 'status waiting';
+                        statusDiv.textContent = 'Ожидание сканирования QR-кода...';
+                    } else {
+                        throw new Error('QR code not available');
+                    }
+                })
+                .catch(err => {
+                    console.log('QR code not ready yet:', err.message);
+                    const placeholder = document.getElementById('qrPlaceholder');
+                    const img = document.getElementById('qrImage');
+                    placeholder.style.display = 'flex';
+                    img.style.display = 'none';
+                });
+        }
+
+        function checkQRCode() {
+            loadQRCode();
+        }
+
+        function refreshQR() {
+            loadQRCode();
+        }
+
+        function checkStatus() {
+            fetch('/api/accounts/' + accountId)
+                .then(res => res.json())
+                .then(data => {
+                    const statusDiv = document.getElementById('status');
+                    if (data.account && data.account.connected) {
+                        statusDiv.className = 'status connected';
+                        statusDiv.textContent = '✓ Подключено успешно!';
+                        clearInterval(checkInterval);
+                        clearInterval(qrCheckInterval);
+                        const placeholder = document.getElementById('qrPlaceholder');
+                        const img = document.getElementById('qrImage');
+                        placeholder.style.display = 'none';
+                        img.style.display = 'none';
+                    } else if (data.account && data.account.qrCode) {
+                        statusDiv.className = 'status waiting';
+                        statusDiv.textContent = 'Ожидание сканирования QR-кода...';
+                        // Обновляем изображение QR-кода
+                        const img = document.getElementById('qrImage');
+                        img.src = '/api/qr/' + accountId + '?t=' + Date.now();
+                    } else if (data.account && data.account.lastError) {
+                        statusDiv.className = 'status error';
+                        statusDiv.textContent = 'Ошибка: ' + data.account.lastError;
+                    } else if (!data.account) {
+                        statusDiv.className = 'status loading';
+                        statusDiv.textContent = 'Инициализация аккаунта...';
+                    }
+                })
+                .catch(err => {
+                    console.error('Status check error:', err);
+                });
+        }
+
+        // Проверяем наличие QR-кода каждые 1 секунду, пока он не появится
+        qrCheckInterval = setInterval(() => {
+            const img = document.getElementById('qrImage');
+            if (img.style.display === 'none' || !img.src) {
+                checkQRCode();
+            }
+        }, 1000);
+
+        // Проверяем статус каждые 2 секунды
+        checkInterval = setInterval(checkStatus, 2000);
+        
+        // Начальная загрузка
+        checkStatus();
+        checkQRCode();
+
+        // Обновляем QR код каждые 30 секунд (на случай истечения)
+        setInterval(() => {
+            const statusDiv = document.getElementById('status');
+            if (statusDiv.className.includes('waiting')) {
+                refreshQR();
+            }
+        }, 30000);
+    </script>
+</body>
+</html>
+
