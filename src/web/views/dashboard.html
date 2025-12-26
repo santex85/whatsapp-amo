@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель управления - WhatsApp-amoCRM Gateway</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin: 0;
+        }
+        .header .user-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header .username {
+            color: #666;
+            font-size: 16px;
+        }
+        .logout-btn {
+            padding: 10px 20px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+        .logout-btn:hover {
+            background: #d32f2f;
+        }
+        .content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+        }
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        .card h2 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .card p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 14px 28px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background: #4CAF50;
+        }
+        .btn-secondary:hover {
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+        .instructions {
+            list-style: none;
+            padding: 0;
+        }
+        .instructions li {
+            padding: 10px 0;
+            color: #666;
+            border-bottom: 1px solid #eee;
+        }
+        .instructions li:last-child {
+            border-bottom: none;
+        }
+        .instructions li::before {
+            content: "✓ ";
+            color: #4CAF50;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .account-id-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 15px;
+            outline: none;
+        }
+        .account-id-input:focus {
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 WhatsApp-amoCRM Gateway</h1>
+            <div class="user-info">
+                <span class="username">Пользователь: <strong id="username">admin</strong></span>
+                <form method="POST" action="/logout" style="display: inline;">
+                    <button type="submit" class="logout-btn">Выйти</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- Подключение WhatsApp -->
+            <div class="card">
+                <h2>🔗 Подключить WhatsApp</h2>
+                <p>Подключите ваш WhatsApp аккаунт для начала работы:</p>
+                
+                <input 
+                    type="text" 
+                    id="accountId" 
+                    class="account-id-input" 
+                    placeholder="Введите ID аккаунта (например: test-1)"
+                    value="test-1"
+                >
+                
+                <a href="#" id="connectBtn" class="btn" onclick="connectWhatsApp(event)">
+                    Подключить WhatsApp
+                </a>
+            </div>
+
+            <!-- Инструкции -->
+            <div class="card">
+                <h2>📋 Инструкция</h2>
+                <ol class="instructions">
+                    <li>Введите ID аккаунта (например: test-1)</li>
+                    <li>Нажмите "Подключить WhatsApp"</li>
+                    <li>Отсканируйте QR-код в WhatsApp</li>
+                    <li>Дождитесь подтверждения подключения</li>
+                </ol>
+            </div>
+
+            <!-- Быстрые ссылки -->
+            <div class="card">
+                <h2>🔗 Быстрые ссылки</h2>
+                <p>Полезные ссылки для работы:</p>
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
+                    <a href="/accounts" class="btn btn-secondary">📱 Список аккаунтов</a>
+                    <a href="/amocrm/connect" class="btn btn-secondary">🔗 Подключить amoCRM</a>
+                    <a href="/health" class="btn btn-secondary">💚 Статус системы</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function connectWhatsApp(e) {
+            e.preventDefault();
+            const accountId = document.getElementById('accountId').value.trim();
+            
+            if (!accountId) {
+                alert('Пожалуйста, введите ID аккаунта');
+                return;
+            }
+            
+            // Переходим на страницу QR кода
+            window.location.href = '/qr/' + encodeURIComponent(accountId);
+        }
+
+        // Разрешаем Enter для подключения
+        document.getElementById('accountId').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                connectWhatsApp(e);
+            }
+        });
+    </script>
+</body>
+</html>

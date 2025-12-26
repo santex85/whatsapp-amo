@@ -8,8 +8,9 @@ import { saveAmoCRMScopeId, getAmoCRMTokens } from '../../database/sqlite';
 export function createAccountsRoutes(manager: WhatsAppManager): Router {
   const router = Router();
 
-  router.get('/accounts', (_req: Request, res: Response) => {
+  router.get('/accounts', (_req: Request, res: Response): void => {
     try {
+      // API endpoint - всегда возвращаем JSON
       const statuses = manager.getAllAccountStatuses();
       res.json({ accounts: statuses });
     } catch (err) {
@@ -21,6 +22,8 @@ export function createAccountsRoutes(manager: WhatsAppManager): Router {
   router.get('/accounts/:accountId', (req: Request, res: Response): void => {
     try {
       const { accountId } = req.params;
+      
+      // API endpoint - всегда возвращаем JSON
       const status = manager.getAccountStatus(accountId);
 
       if (!status) {

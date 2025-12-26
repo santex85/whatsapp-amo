@@ -43,6 +43,14 @@ export function initDatabase(): DatabaseType {
       updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
     );
 
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+      updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_amocrm_tokens_expires_at ON amocrm_tokens(expires_at);
   `);
 
@@ -61,6 +69,73 @@ export function initDatabase(): DatabaseType {
 
   logger.info('Database initialized');
   return db;
+}
+
+/**
+ * Инициализирует первого администратора из переменных окружения
+ * Вызывается после initDatabase()
+ * Администратор создается ТОЛЬКО если данные есть в .env
+ */
+export async function initDefaultAdmin(): Promise<void> {
+  try {
+    // Проверяем наличие пользователей
+    if (hasUsers()) {
+      logger.info('✅ Users already exist, skipping admin creation');
+      return;
+    }
+
+    // Получаем данные из .env (обязательно, без дефолтов)
+    const adminUsernameEnv = process.env.ADMIN_USERNAME;
+    const adminPasswordEnv = process.env.ADMIN_PASSWORD;
+    
+    // Проверяем наличие обязательных переменных
+    if (!adminUsernameEnv || !adminPasswordEnv) {
+      logger.warn('');
+      logger.warn('═══════════════════════════════════════════════════════');
+      logger.warn('⚠️  ADMIN CREDENTIALS NOT FOUND IN .env');
+      logger.warn('═══════════════════════════════════════════════════════');
+      logger.warn('');
+      logger.warn('To create admin user, add to .env file:');
+      logger.warn('');
+      logger.warn('  ADMIN_USERNAME=your_username');
+      logger.warn('  ADMIN_PASSWORD=your_secure_password');
+      logger.warn('  SESSION_SECRET=your_session_secret_key');
+      logger.warn('');
+      logger.warn('Example:');
+      logger.warn('  ADMIN_USERNAME=admin');
+      logger.warn('  ADMIN_PASSWORD=MySecurePassword123!');
+      logger.warn('  SESSION_SECRET=super-secret-key-change-in-production');
+      logger.warn('');
+      logger.warn('After adding credentials:');
+      logger.warn('  1. Save .env file');
+      logger.warn('  2. Restart the server');
+      logger.warn('  3. Admin user will be created automatically');
+      logger.warn('');
+      logger.warn('═══════════════════════════════════════════════════════');
+      logger.warn('');
+      return;
+    }
+
+    logger.info({ 
+      username: adminUsernameEnv,
+      passwordLength: adminPasswordEnv.length,
+    }, 'Creating admin user from .env credentials...');
+    
+    await createUser(adminUsernameEnv, adminPasswordEnv);
+    logger.info({ username: adminUsernameEnv }, '✅ Admin user created successfully from .env');
+  } catch (err: any) {
+    // Если пользователь уже существует (например, создан вручную), это нормально
+    if (err?.message?.includes('UNIQUE constraint')) {
+      logger.info({ username: process.env.ADMIN_USERNAME }, '✅ Admin user already exists');
+    } else {
+      logger.error({ 
+        err, 
+        errorMessage: err?.message,
+        errorStack: err?.stack,
+        username: process.env.ADMIN_USERNAME
+      }, '❌ Failed to create admin user');
+    }
+  }
 }
 
 export function getDatabase(): DatabaseType {
@@ -172,5 +247,83 @@ export function getAccountIdByScopeId(scopeId: string): string | null {
     'SELECT account_id FROM amocrm_tokens WHERE scope_id = ? LIMIT 1'
   ).get(scopeId) as { account_id: string } | undefined;
   return row?.account_id || null;
+}
+
+// Users
+export interface User {
+  id: number;
+  username: string;
+  password_hash: string;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * Создает пользователя с хешированием пароля
+ * @param username - имя пользователя
+ * @param password - пароль (будет захеширован)
+ */
+export async function createUser(username: string, password: string): Promise<void> {
+  const bcrypt = await import('bcrypt');
+  const database = getDatabase();
+  const passwordHash = await bcrypt.hash(password, 10);
+  
+  database.prepare(`
+    INSERT INTO users (username, password_hash, updated_at)
+    VALUES (?, ?, strftime('%s', 'now'))
+  `).run(username, passwordHash);
+  
+  logger.info({ username }, 'User created');
+}
+
+/**
+ * Получает пользователя по имени
+ * @param username - имя пользователя
+ * @returns пользователь или null
+ */
+export function getUserByUsername(username: string): User | null {
+  const database = getDatabase();
+  const row = database.prepare(
+    'SELECT id, username, password_hash, created_at, updated_at FROM users WHERE username = ? LIMIT 1'
+  ).get(username) as User | undefined;
+  return row || null;
+}
+
+/**
+ * Проверяет пароль пользователя
+ * @param username - имя пользователя
+ * @param password - пароль для проверки
+ * @returns true если пароль верный, false иначе
+ */
+export async function verifyPassword(username: string, password: string): Promise<boolean> {
+  try {
+    const user = getUserByUsername(username);
+    if (!user) {
+      logger.debug({ username }, 'User not found');
+      return false;
+    }
+    
+    const bcrypt = await import('bcrypt');
+    const isValid = await bcrypt.compare(password, user.password_hash);
+    
+    if (!isValid) {
+      logger.debug({ username }, 'Password mismatch');
+    }
+    
+    return isValid;
+  } catch (err) {
+    logger.error({ err, username }, 'Error verifying password');
+    throw err;
+  }
+}
+
+/**
+ * Проверяет наличие пользователей в БД
+ * @returns true если есть хотя бы один пользователь
+ */
+export function hasUsers(): boolean {
+  const db = getDatabase();
+  const row = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number } | undefined;
+  return (row?.count || 0) > 0;
 }
 

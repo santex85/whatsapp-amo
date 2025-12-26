@@ -4,6 +4,8 @@ import { createQRRoutes } from './routes/qr';
 import { createAccountsRoutes } from './routes/accounts';
 import { createWebhookRoutes } from './routes/webhook';
 import { createAuthRoutes } from './routes/auth';
+import { createLoginRoutes } from './routes/login';
+import { setupSessionMiddleware, requireAuth } from '../auth/session';
 import { AmoCRMWebhookPayload } from '../amocrm/types';
 import { getAccountIdByScopeId } from '../database/sqlite';
 import { validateWebhookRequest } from '../amocrm/webhook';
@@ -23,6 +25,9 @@ export function createWebServer(
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
+  // Настройка сессий (должно быть до других middleware)
+  setupSessionMiddleware(app);
+
   // Логирование важных запросов
   app.use((req, _res, next) => {
     // Логируем только важные API запросы и webhook по scope_id
@@ -32,11 +37,69 @@ export function createWebServer(
     next();
   });
 
-  // API routes
+  // Публичные маршруты (не требуют авторизации)
+  app.use('/', createLoginRoutes()); // Страница логина
+  app.use('/', createAuthRoutes()); // OAuth для amoCRM
+  
+  // API routes (не требуют авторизации)
   app.use('/api', createAccountsRoutes(manager));
   app.use('/api', createQRRoutes(manager));
   app.use('/api', createWebhookRoutes(onWebhookMessage));
-  app.use('/', createAuthRoutes());
+  
+  // HTML страницы (без /api префикса, требуют авторизации)
+  // Страница подключения amoCRM
+  app.get('/amocrm/connect', (_req: Request, res: Response): void => {
+    try {
+      const templatePath = path.join(__dirname, 'views', 'amocrm-connect.html');
+      
+      if (!fs.existsSync(templatePath)) {
+        res.status(404).send('Connect template not found');
+        return;
+      }
+
+      const html = fs.readFileSync(templatePath, 'utf-8');
+      res.send(html);
+    } catch (err) {
+      logger.error({ err }, 'Failed to serve amoCRM connect page');
+      res.status(500).send('Internal server error');
+    }
+  });
+  
+  // Страница списка аккаунтов
+  app.get('/accounts', (_req: Request, res: Response): void => {
+    try {
+      const templatePath = path.join(__dirname, 'views', 'accounts.html');
+      
+      if (!fs.existsSync(templatePath)) {
+        res.status(404).send('Accounts template not found');
+        return;
+      }
+
+      const html = fs.readFileSync(templatePath, 'utf-8');
+      res.send(html);
+    } catch (err) {
+      logger.error({ err }, 'Failed to serve accounts page');
+      res.status(500).send('Internal server error');
+    }
+  });
+  
+  // Страница деталей аккаунта
+  app.get('/accounts/:accountId', (_req: Request, res: Response): void => {
+    try {
+      const templatePath = path.join(__dirname, 'views', 'account-detail.html');
+      
+      if (!fs.existsSync(templatePath)) {
+        res.status(404).send('Account detail template not found');
+        return;
+      }
+
+      const html = fs.readFileSync(templatePath, 'utf-8');
+      res.send(html);
+    } catch (err) {
+      logger.error({ err }, 'Failed to serve account detail page');
+      res.status(500).send('Internal server error');
+    }
+  });
   
   // Webhook endpoint по scope_id (без /api префикса, как указано в плане)
   // Endpoint: POST /location/:scopeId
@@ -124,6 +187,36 @@ export function createWebServer(
     }
   });
 
+  // Защищенные маршруты (требуют авторизации)
+  // Применяем requireAuth ко всем GET маршрутам кроме исключений
+  app.use((req, res, next) => {
+    // Исключения: API JSON endpoints, webhook, login, OAuth callback, health JSON
+    if (
+      req.path.startsWith('/location/') ||
+      req.path === '/login' ||
+      req.path.startsWith('/auth/amocrm/')
+    ) {
+      return next();
+    }
+    
+    // Для JSON API endpoints (с явным Accept: application/json) не требуем авторизации
+    if (req.path.startsWith('/api/') && req.get('Accept')?.includes('application/json')) {
+      return next();
+    }
+    
+    // Для health с JSON тоже не требуем (для API совместимости)
+    if (req.path === '/health' && req.get('Accept')?.includes('application/json')) {
+      return next();
+    }
+    
+    // Для всех остальных GET запросов требуется авторизация
+    if (req.method === 'GET') {
+      return requireAuth(req, res, next);
+    }
+    
+    next();
+  });
+
   // QR page route - автоматически создает аккаунт при первом обращении
   app.get('/qr/:accountId', async (req: Request, res: Response): Promise<void> => {
     try {
@@ -160,24 +253,52 @@ export function createWebServer(
     }
   });
 
-  // Health check
-  app.get('/health', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  // Health check - HTML страница
+  app.get('/health', (req: Request, res: Response): void => {
+    // Если запрос с Accept: application/json, возвращаем JSON
+    if (req.get('Accept')?.includes('application/json')) {
+      res.json({ status: 'ok', timestamp: new Date().toISOString() });
+      return;
+    }
+    
+    // Иначе возвращаем HTML страницу
+    try {
+      const templatePath = path.join(__dirname, 'views', 'health.html');
+      
+      if (!fs.existsSync(templatePath)) {
+        res.json({ status: 'ok', timestamp: new Date().toISOString() });
+        return;
+      }
+
+      const html = fs.readFileSync(templatePath, 'utf-8');
+      res.send(html);
+    } catch (err) {
+      logger.error({ err }, 'Failed to serve health page');
+      res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    }
   });
 
-  // Root
-  app.get('/', (_req: Request, res: Response) => {
-    res.json({
-      name: 'WhatsApp-amoCRM Gateway',
-      version: '1.0.0',
-      endpoints: {
-        accounts: '/api/accounts',
-        qr: '/qr/:accountId',
-        webhook: '/api/webhook/amocrm',
-        webhookByScope: '/location/:scopeId',
-        health: '/health',
-      },
-    });
+  // Root - Dashboard (требует авторизации)
+  app.get('/', async (req: Request, res: Response): Promise<void> => {
+    try {
+      const templatePath = path.join(__dirname, 'views', 'dashboard.html');
+      
+      if (!fs.existsSync(templatePath)) {
+        res.status(404).send('Dashboard template not found');
+        return;
+      }
+
+      let html = fs.readFileSync(templatePath, 'utf-8');
+      
+      // Подставляем имя пользователя из сессии
+      const username = req.session?.username || 'admin';
+      html = html.replace(/<strong id="username">admin<\/strong>/, `<strong id="username">${username}</strong>`);
+      
+      res.send(html);
+    } catch (err) {
+      logger.error({ err }, 'Failed to serve dashboard');
+      res.status(500).send('Internal server error');
+    }
   });
 
   return app;

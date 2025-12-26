@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Детали аккаунта - WhatsApp-amoCRM Gateway</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin: 0;
+        }
+        .btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background: #4CAF50;
+        }
+        .btn-danger {
+            background: #f44336;
+        }
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+        }
+        .card h2 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        .info-grid {
+            display: grid;
+            gap: 20px;
+        }
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+        .info-label {
+            font-weight: 600;
+            color: #666;
+        }
+        .info-value {
+            color: #333;
+            font-weight: 500;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .status-connected {
+            background: #4CAF50;
+            color: white;
+        }
+        .status-disconnected {
+            background: #f44336;
+            color: white;
+        }
+        .error-message {
+            background: #fff5f5;
+            border: 2px solid #f44336;
+            border-radius: 8px;
+            padding: 15px;
+            color: #721c24;
+            margin-top: 20px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 Детали аккаунта</h1>
+            <div>
+                <a href="/accounts" class="btn btn-secondary">← Назад к списку</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <div id="accountContainer" class="loading">
+                Загрузка данных аккаунта...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const accountId = window.location.pathname.split('/').pop();
+        
+        async function loadAccount() {
+            const container = document.getElementById('accountContainer');
+            
+            try {
+                container.innerHTML = '<div class="loading">Загрузка данных аккаунта...</div>';
+                
+                const response = await fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        container.innerHTML = `
+                            <div class="error-message">
+                                <strong>Аккаунт не найден</strong>
+                                <p>Аккаунт "${escapeHtml(accountId)}" не существует</p>
+                                <a href="/accounts" class="btn" style="margin-top: 15px; display: inline-block;">Вернуться к списку</a>
+                            </div>
+                        `;
+                        return;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const account = data.account;
+                
+                if (!account) {
+                    throw new Error('Account data not found');
+                }
+                
+                const statusClass = account.connected ? 'status-connected' : 'status-disconnected';
+                const statusText = account.connected ? '✅ Подключен' : '❌ Отключен';
+                
+                container.innerHTML = `
+                    <h2>Аккаунт: ${escapeHtml(account.accountId)}</h2>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">ID аккаунта:</span>
+                            <span class="info-value">${escapeHtml(account.accountId)}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Статус:</span>
+                            <span class="status-badge ${statusClass}">${statusText}</span>
+                        </div>
+                        ${account.lastError ? `
+                        <div class="info-item">
+                            <span class="info-label">Последняя ошибка:</span>
+                            <span class="info-value" style="color: #f44336;">${escapeHtml(account.lastError)}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <div class="actions">
+                        ${account.connected ? '' : `<a href="/qr/${encodeURIComponent(account.accountId)}" class="btn btn-secondary">🔗 Подключить WhatsApp</a>`}
+                        <button onclick="deleteAccount()" class="btn btn-danger">🗑️ Удалить аккаунт</button>
+                    </div>
+                `;
+                
+            } catch (err) {
+                container.innerHTML = `
+                    <div class="error-message">
+                        <strong>Ошибка загрузки:</strong> ${escapeHtml(err.message)}
+                    </div>
+                `;
+            }
+        }
+        
+        async function deleteAccount() {
+            if (!confirm(`Вы уверены, что хотите удалить аккаунт "${accountId}"?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Ошибка удаления');
+                }
+                
+                alert('Аккаунт успешно удален');
+                window.location.href = '/accounts';
+            } catch (err) {
+                alert('Ошибка удаления аккаунта: ' + err.message);
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Загружаем данные при загрузке страницы
+        loadAccount();
+    </script>
+</body>
+</html>

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Аккаунты - WhatsApp-amoCRM Gateway</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin: 0;
+        }
+        .header .actions {
+            display: flex;
+            gap: 15px;
+        }
+        .btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background: #4CAF50;
+        }
+        .btn-danger {
+            background: #f44336;
+        }
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+        }
+        .card h2 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        .accounts-list {
+            display: grid;
+            gap: 20px;
+        }
+        .account-item {
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: border-color 0.3s;
+        }
+        .account-item:hover {
+            border-color: #667eea;
+        }
+        .account-item.connected {
+            border-color: #4CAF50;
+            background: #f1f8f4;
+        }
+        .account-item.disconnected {
+            border-color: #f44336;
+            background: #fff5f5;
+        }
+        .account-info {
+            flex: 1;
+        }
+        .account-id {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .account-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+        .status-connected {
+            background: #4CAF50;
+            color: white;
+        }
+        .status-disconnected {
+            background: #f44336;
+            color: white;
+        }
+        .status-pending {
+            background: #ff9800;
+            color: white;
+        }
+        .account-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            background: #fff5f5;
+            border: 2px solid #f44336;
+            border-radius: 12px;
+            padding: 20px;
+            color: #721c24;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 Управление аккаунтами</h1>
+            <div class="actions">
+                <a href="/" class="btn btn-secondary">← Назад</a>
+                <button onclick="refreshAccounts()" class="btn">🔄 Обновить</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Аккаунты WhatsApp</h2>
+            <div id="errorContainer"></div>
+            <div id="accountsContainer" class="loading">
+                Загрузка аккаунтов...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadAccounts() {
+            const container = document.getElementById('accountsContainer');
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = '';
+            
+            try {
+                container.innerHTML = '<div class="loading">Загрузка аккаунтов...</div>';
+                
+                const response = await fetch('/api/accounts', {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const accounts = data.accounts || [];
+                
+                if (accounts.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📭</div>
+                            <h3>Нет аккаунтов</h3>
+                            <p>Подключите первый WhatsApp аккаунт на главной странице</p>
+                            <a href="/" class="btn" style="margin-top: 20px; display: inline-block;">Подключить аккаунт</a>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = '<div class="accounts-list"></div>';
+                const list = container.querySelector('.accounts-list');
+                
+                accounts.forEach(account => {
+                    const statusClass = account.connected ? 'connected' : 'disconnected';
+                    const statusText = account.connected ? '✅ Подключен' : '❌ Отключен';
+                    const statusBadge = account.connected ? 'status-connected' : 'status-disconnected';
+                    
+                    const accountItem = document.createElement('div');
+                    accountItem.className = `account-item ${statusClass}`;
+                    accountItem.innerHTML = `
+                        <div class="account-info">
+                            <div class="account-id">${escapeHtml(account.accountId)}</div>
+                            <div>
+                                <span class="account-status ${statusBadge}">${statusText}</span>
+                                ${account.lastError ? `<span style="color: #f44336;">⚠️ ${escapeHtml(account.lastError)}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="account-actions">
+                            ${account.connected ? '' : `<a href="/qr/${encodeURIComponent(account.accountId)}" class="btn btn-secondary">Подключить</a>`}
+                            <a href="/accounts/${encodeURIComponent(account.accountId)}" class="btn">Детали</a>
+                            <button onclick="deleteAccount('${encodeURIComponent(account.accountId)}')" class="btn btn-danger">Удалить</button>
+                        </div>
+                    `;
+                    list.appendChild(accountItem);
+                });
+                
+            } catch (err) {
+                errorContainer.innerHTML = `
+                    <div class="error">
+                        <strong>Ошибка загрузки аккаунтов:</strong> ${escapeHtml(err.message)}
+                    </div>
+                `;
+                container.innerHTML = '<div class="empty-state">Не удалось загрузить аккаунты</div>';
+            }
+        }
+        
+        async function deleteAccount(accountId) {
+            if (!confirm(`Вы уверены, что хотите удалить аккаунт "${accountId}"?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/accounts/${encodeURIComponent(accountId)}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Ошибка удаления');
+                }
+                
+                alert('Аккаунт успешно удален');
+                loadAccounts();
+            } catch (err) {
+                alert('Ошибка удаления аккаунта: ' + err.message);
+            }
+        }
+        
+        function refreshAccounts() {
+            loadAccounts();
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Загружаем аккаунты при загрузке страницы
+        loadAccounts();
+        
+        // Автообновление каждые 5 секунд
+        setInterval(loadAccounts, 5000);
+    </script>
+</body>
+</html>

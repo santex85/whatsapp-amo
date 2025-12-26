@@ -1,4 +1,8 @@
-import { initDatabase } from './database/sqlite';
+// Загружаем .env в самом начале, до всех остальных импортов
+import dotenv from 'dotenv';
+dotenv.config();
+
+import { initDatabase, initDefaultAdmin } from './database/sqlite';
 import { WhatsAppManager } from './whatsapp/manager';
 import { getQueue } from './queue/redis';
 import { QueueProcessor } from './queue/processor';
@@ -28,6 +32,14 @@ import { IncomingMessage } from './whatsapp/handlers/messages';
 
 // Инициализация компонентов
 initDatabase();
+// Инициализация первого администратора из .env (асинхронно, не блокирует запуск)
+initDefaultAdmin().catch((err) => {
+  logger.error({ 
+    err, 
+    errorMessage: err instanceof Error ? err.message : 'Unknown error',
+    errorStack: err instanceof Error ? err.stack : undefined
+  }, '❌ Failed to initialize default admin');
+});
 const queue = getQueue();
 const manager = new WhatsAppManager();
 const mediaStorage = new MediaStorage();
