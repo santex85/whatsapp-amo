@@ -252,10 +252,11 @@ queueProcessor.registerProcessor('outgoing', async (message: QueueMessage) => {
       }
     } else {
       // Отправка текстового сообщения
+      logger.info({ accountId: message.accountId, to: data.to, messagePreview: data.message?.substring(0, 50) }, '📤 Отправка текстового сообщения в WhatsApp');
       await manager.sendMessage(message.accountId, data.to, data.message);
     }
 
-    logger.info({ accountId: message.accountId, to: data.to }, 'Message sent to WhatsApp');
+    logger.info({ accountId: message.accountId, to: data.to }, '✅ Сообщение успешно отправлено в WhatsApp');
   } catch (err) {
     logger.error({ err, accountId: message.accountId }, 'Failed to send message to WhatsApp');
     throw err;
