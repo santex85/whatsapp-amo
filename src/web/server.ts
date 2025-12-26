@@ -115,7 +115,13 @@ export function createWebServer(
         return;
       }
 
-      logger.info({ scopeId }, '📥 Webhook получен по scope_id');
+      logger.info({ 
+        scopeId,
+        headers: req.headers,
+        body: req.body,
+        bodyKeys: req.body ? Object.keys(req.body) : [],
+        contentType: req.get('content-type')
+      }, '📥 Webhook получен по scope_id');
 
       // Находим account_id по scope_id
       const accountId = getAccountIdByScopeId(scopeId);
