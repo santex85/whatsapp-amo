@@ -71,6 +71,30 @@ export function createAccountsRoutes(manager: WhatsAppManager): Router {
   });
 
   // Эндпоинт для получения scope_id (connect) - выполняется один раз при настройке
+  // Проверка наличия токенов для аккаунта
+  router.get('/amocrm/tokens/:accountId', (req: Request, res: Response): void => {
+    try {
+      const { accountId } = req.params;
+      const tokens = getAmoCRMTokens(accountId);
+      
+      if (tokens) {
+        res.json({ 
+          hasTokens: true,
+          subdomain: tokens.subdomain,
+          expiresAt: tokens.expires_at 
+        });
+      } else {
+        res.status(404).json({ 
+          hasTokens: false,
+          message: 'Tokens not found' 
+        });
+      }
+    } catch (err) {
+      logger.error({ err, accountId: req.params.accountId }, 'Failed to check tokens');
+      res.status(500).json({ error: 'Failed to check tokens' });
+    }
+  });
+
   router.post('/amocrm/connect', async (req: Request, res: Response): Promise<void> => {
     try {
       const { account_id, subdomain, amojo_account_id } = req.body;

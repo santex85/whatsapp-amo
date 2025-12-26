@@ -177,6 +177,13 @@
                 Подключить канал
             </button>
         </form>
+
+        <div id="authSection" style="margin-top: 30px; padding-top: 30px; border-top: 2px solid #e0e0e0; display: none;">
+            <p style="color: #666; margin-bottom: 15px;">Перед подключением канала необходимо авторизоваться в amoCRM:</p>
+            <button type="button" class="btn" id="authBtn" style="background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);">
+                🔐 Авторизоваться в amoCRM
+            </button>
+        </div>
     </div>
 
     <script>
@@ -184,6 +191,53 @@
         const errorMessage = document.getElementById('errorMessage');
         const successMessage = document.getElementById('successMessage');
         const submitBtn = document.getElementById('submitBtn');
+        const authSection = document.getElementById('authSection');
+        const authBtn = document.getElementById('authBtn');
+
+        // При загрузке страницы проверяем наличие токенов для заполненного аккаунта
+        window.addEventListener('DOMContentLoaded', () => {
+            const accountId = document.getElementById('account_id').value.trim();
+            const subdomain = document.getElementById('subdomain').value.trim();
+            
+            if (accountId && subdomain) {
+                checkTokens(accountId, subdomain);
+            }
+        });
+
+        // Функция проверки токенов
+        async function checkTokens(accountId, subdomain) {
+            try {
+                const response = await fetch(`/api/amocrm/tokens/${accountId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok || response.status === 404) {
+                    // Токены не найдены - показываем кнопку авторизации
+                    authSection.style.display = 'block';
+                }
+            } catch (err) {
+                // При ошибке тоже показываем кнопку авторизации
+                authSection.style.display = 'block';
+            }
+        }
+
+        // Обработчик кнопки авторизации
+        authBtn.addEventListener('click', () => {
+            const accountId = document.getElementById('account_id').value.trim();
+            const subdomain = document.getElementById('subdomain').value.trim();
+            
+            if (!accountId || !subdomain) {
+                errorMessage.textContent = 'Заполните Account ID и Subdomain перед авторизацией';
+                errorMessage.classList.add('show');
+                return;
+            }
+            
+            // Перенаправляем на страницу авторизации
+            window.location.href = `/auth/amocrm?account_id=${encodeURIComponent(accountId)}&subdomain=${encodeURIComponent(subdomain)}`;
+        });
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -212,7 +266,14 @@
                 const data = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                    const errorText = data.error || `HTTP error! status: ${response.status}`;
+                    
+                    // Если ошибка связана с отсутствием токенов - показываем кнопку авторизации
+                    if (errorText.includes('tokens not found') || errorText.includes('authorize')) {
+                        authSection.style.display = 'block';
+                    }
+                    
+                    throw new Error(errorText);
                 }
 
                 // Успешное подключение
@@ -238,3 +299,4 @@
     </script>
 </body>
 </html>
+
