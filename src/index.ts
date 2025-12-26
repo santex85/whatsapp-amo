@@ -316,6 +316,29 @@ async function start() {
     console.log('✅ Подключен к Redis');
     logger.info('✅ Подключен к Redis');
 
+    // Восстановление аккаунтов из сохраненных сессий
+    console.log('🔄 Восстановление аккаунтов из сохраненных сессий...');
+    try {
+      const { promises: fsPromises } = await import('fs');
+      const sessionsDir = './storage/sessions';
+      const sessions = await fsPromises.readdir(sessionsDir, { withFileTypes: true });
+      
+      for (const session of sessions) {
+        if (session.isDirectory() && session.name !== '{accountId}') {
+          const accountId = session.name;
+          logger.info({ accountId }, '🔄 Восстановление аккаунта из сессии');
+          try {
+            await manager.addAccount(accountId);
+            logger.info({ accountId }, '✅ Аккаунт успешно восстановлен');
+          } catch (err) {
+            logger.error({ err, accountId }, '❌ Ошибка восстановления аккаунта');
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn({ err }, 'Не удалось восстановить аккаунты из сессий (возможно, директория не существует)');
+    }
+
     // Запуск обработчика очереди
     console.log('🔄 Запуск обработчика очереди...');
     await queueProcessor.start();
