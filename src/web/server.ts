@@ -177,12 +177,8 @@ export function createWebServer(
       });
 
       // Отвечаем сразу, чтобы amoCRM не считал запрос неудачным
-      res.status(200).json({ 
-        status: 'ok', 
-        account_id: accountId,
-        scope_id: scopeId,
-        message: 'Webhook received and queued for processing'
-      });
+      // Упрощенный формат ответа для amoCRM
+      res.status(200).json({ status: 'ok' });
     } catch (err) {
       logger.error({ err, scopeId: req.params.scopeId, body: req.body }, 'Invalid webhook request');
       
