@@ -44,6 +44,13 @@ export function setupMessageHandler(
       for (const msg of messages) {
         try {
           console.log(`[DEBUG] 🔍 Обработка сообщения: from=${msg.key.remoteJid}, fromMe=${msg.key.fromMe}`);
+          
+          // Пропускаем сообщения, которые мы сами отправили (fromMe === true)
+          if (msg.key.fromMe) {
+            console.log(`[DEBUG] ⏭️ Пропущено: собственное отправленное сообщение (fromMe=true)`);
+            continue;
+          }
+          
           // Пропускаем сообщения из групп (если нужно обрабатывать только личные)
           const isGroup = msg.key.remoteJid?.endsWith('@g.us') || false;
           
