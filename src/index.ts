@@ -101,15 +101,27 @@ async function handleOutgoingMessage(payload: AmoCRMWebhookPayload): Promise<voi
       throw new Error(`Account ${payload.account_id} is not connected. Please scan QR code first.`);
     }
 
-    // Извлекаем номер телефона из chat_id (формат может быть разным)
-    const phoneNumber = payload.chat_id;
+    // Извлекаем номер телефона из chat_id (формат может быть разным: "WhatsApp 182909805834253" или просто номер)
+    let phoneNumber = payload.chat_id;
+    
+    // Убираем префикс "WhatsApp " если есть
+    phoneNumber = phoneNumber.replace(/^WhatsApp\s+/i, '');
+    
+    // Убираем все нецифровые символы (оставляем только цифры)
+    phoneNumber = phoneNumber.replace(/\D/g, '');
+    
+    if (!phoneNumber) {
+      throw new Error(`Invalid chat_id format: ${payload.chat_id}. Cannot extract phone number.`);
+    }
+    
+    // Формируем адрес WhatsApp
     const to = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
 
     logger.info({ 
       accountId: payload.account_id, 
-      chatId: payload.chat_id,
-      phoneNumber,
-      to,
+      originalChatId: payload.chat_id,
+      normalizedPhoneNumber: phoneNumber,
+      whatsappAddress: to,
       messagePreview: payload.message.content?.substring(0, 50) || ''
     }, '📱 Подготовка к отправке сообщения в WhatsApp');
 
