@@ -21,6 +21,9 @@ export function createWebServer(
 ): Express {
   const app = express();
 
+  // Настройка доверия к прокси (nginx) - должно быть первым
+  app.set('trust proxy', 1);
+
   // Middleware
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));

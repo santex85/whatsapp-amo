@@ -25,7 +25,7 @@ export function setupSessionMiddleware(app: Express): void {
         secure: config.server.nodeEnv === 'production', // HTTPS only в production
         httpOnly: true, // Защита от XSS
         maxAge: 24 * 60 * 60 * 1000, // 24 часа
-        sameSite: 'strict', // Защита от CSRF
+        sameSite: 'lax', // Защита от CSRF (lax для лучшей совместимости)
       },
       name: 'whatsapp-amo.sid', // Имя cookie
     })
@@ -56,3 +56,4 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     res.redirect(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
   }
 }
+
