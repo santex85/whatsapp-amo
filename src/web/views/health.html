@@ -64,10 +64,54 @@
         .status-ok {
             color: #4CAF50;
         }
+        .status-error {
+            color: #f44336;
+        }
+        .status-warning {
+            color: #ff9800;
+        }
         .timestamp {
             font-size: 14px;
             color: #999;
             margin-top: 5px;
+        }
+        .account-status {
+            background: #fff;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .account-status h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .status-detail {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .status-detail:last-child {
+            border-bottom: none;
+        }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .badge-error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .badge-warning {
+            background: #fff3e0;
+            color: #e65100;
         }
         .btn {
             display: inline-block;
@@ -131,6 +175,52 @@
                     second: '2-digit'
                 });
                 
+                // Формируем информацию об аккаунтах
+                let accountsHtml = '';
+                if (data.accounts && data.accounts.length > 0) {
+                    accountsHtml = '<div style="margin-top: 30px;"><h2 style="color: #333; margin-bottom: 20px;">Статус подключений</h2>';
+                    data.accounts.forEach(acc => {
+                        const whatsappStatus = acc.whatsapp.connected ? 
+                            '<span class="status-badge badge-success">✅ Подключен</span>' : 
+                            '<span class="status-badge badge-error">❌ Отключен</span>';
+                        
+                        const amocrmTokensStatus = acc.amocrm.hasTokens ? 
+                            '<span class="status-badge badge-success">✅ Токены есть</span>' : 
+                            '<span class="status-badge badge-error">❌ Токены отсутствуют</span>';
+                        
+                        const amocrmScopeStatus = acc.amocrm.hasScopeId ? 
+                            '<span class="status-badge badge-success">✅ Scope ID настроен</span>' : 
+                            '<span class="status-badge badge-warning">⚠️ Scope ID не настроен</span>';
+                        
+                        const tokenValid = acc.amocrm.tokenValid !== undefined ? 
+                            (acc.amocrm.tokenValid ? 
+                                '<span class="status-badge badge-success">✅ Действителен</span>' : 
+                                '<span class="status-badge badge-error">❌ Истек</span>') : 
+                            '';
+                        
+                        accountsHtml += `
+                            <div class="account-status">
+                                <h3>📱 Аккаунт: ${acc.accountId}</h3>
+                                <div class="status-detail">
+                                    <span class="status-label">WhatsApp:</span>
+                                    <span class="status-value">${whatsappStatus}</span>
+                                </div>
+                                <div class="status-detail">
+                                    <span class="status-label">amoCRM Токены:</span>
+                                    <span class="status-value">${amocrmTokensStatus} ${tokenValid}</span>
+                                </div>
+                                <div class="status-detail">
+                                    <span class="status-label">amoCRM Канал:</span>
+                                    <span class="status-value">${amocrmScopeStatus}</span>
+                                </div>
+                                ${acc.amocrm.scopeId ? `<div class="status-detail"><span class="status-label">Scope ID:</span><span style="font-family: monospace; font-size: 12px;">${acc.amocrm.scopeId.substring(0, 30)}...</span></div>` : ''}
+                                ${acc.whatsapp.lastError ? `<div class="status-detail"><span class="status-label">Последняя ошибка:</span><span style="color: #f44336;">${acc.whatsapp.lastError}</span></div>` : ''}
+                            </div>
+                        `;
+                    });
+                    accountsHtml += '</div>';
+                }
+                
                 container.innerHTML = `
                     <div class="status-grid">
                         <div class="status-item">
@@ -144,7 +234,22 @@
                                 <div class="timestamp">${data.timestamp}</div>
                             </span>
                         </div>
+                        ${data.summary ? `
+                        <div class="status-item">
+                            <span class="status-label">Всего аккаунтов</span>
+                            <span class="status-value">${data.summary.totalAccounts}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">WhatsApp подключено</span>
+                            <span class="status-value ${data.summary.whatsappConnected === data.summary.totalAccounts ? 'status-ok' : 'status-warning'}">${data.summary.whatsappConnected} / ${data.summary.totalAccounts}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">amoCRM настроено</span>
+                            <span class="status-value ${data.summary.amocrmConfigured === data.summary.totalAccounts ? 'status-ok' : 'status-warning'}">${data.summary.amocrmConfigured} / ${data.summary.totalAccounts}</span>
+                        </div>
+                        ` : ''}
                     </div>
+                    ${accountsHtml}
                 `;
                 
             } catch (err) {
@@ -164,3 +269,4 @@
     </script>
 </body>
 </html>
+

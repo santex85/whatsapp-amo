@@ -257,10 +257,47 @@ export function createWebServer(
   });
 
   // Health check - HTML страница
-  app.get('/health', (req: Request, res: Response): void => {
-    // Если запрос с Accept: application/json, возвращаем JSON
+  app.get('/health', async (req: Request, res: Response): Promise<void> => {
+    // Если запрос с Accept: application/json, возвращаем JSON с детальной информацией
     if (req.get('Accept')?.includes('application/json')) {
-      res.json({ status: 'ok', timestamp: new Date().toISOString() });
+      try {
+        const { getAmoCRMTokens } = await import('../database/sqlite');
+        const accounts = manager.getAllAccountStatuses();
+        
+        const accountsWithStatus = accounts.map(account => {
+          const tokens = getAmoCRMTokens(account.accountId);
+          
+          return {
+            accountId: account.accountId,
+            whatsapp: {
+              connected: account.connected,
+              status: account.status,
+              lastError: account.lastError || null,
+            },
+            amocrm: {
+              hasTokens: !!tokens,
+              hasScopeId: !!(tokens?.scope_id),
+              scopeId: tokens?.scope_id || null,
+              tokenExpiresAt: tokens?.expires_at ? new Date(tokens.expires_at).toISOString() : null,
+              tokenValid: tokens?.expires_at ? tokens.expires_at > Date.now() : false,
+            }
+          };
+        });
+        
+        res.json({ 
+          status: 'ok', 
+          timestamp: new Date().toISOString(),
+          accounts: accountsWithStatus,
+          summary: {
+            totalAccounts: accounts.length,
+            whatsappConnected: accounts.filter(a => a.connected).length,
+            amocrmConfigured: accountsWithStatus.filter(a => a.amocrm.hasTokens && a.amocrm.hasScopeId).length,
+          }
+        });
+      } catch (err) {
+        logger.error({ err }, 'Failed to get health status');
+        res.json({ status: 'ok', timestamp: new Date().toISOString() });
+      }
       return;
     }
     
