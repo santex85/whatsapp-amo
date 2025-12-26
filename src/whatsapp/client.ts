@@ -139,8 +139,14 @@ export class WhatsAppClient {
         // Отправка медиа будет обработана в media/uploader.ts
         throw new Error('Media sending not implemented in client, use media handler');
       } else {
-        await this.sock.sendMessage(to, { text: message });
-        logger.info({ accountId: this.accountId, to, messageLength: message.length }, '✅ Message sent successfully via WhatsApp');
+        const result = await this.sock.sendMessage(to, { text: message });
+        logger.info({ 
+          accountId: this.accountId, 
+          to, 
+          messageLength: message.length,
+          messageId: result?.key?.id,
+          status: result?.status
+        }, '✅ Message sent successfully via WhatsApp');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
