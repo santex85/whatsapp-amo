@@ -134,8 +134,11 @@ export function createWebServer(
       // Валидируем payload от amoCRM
       let payload: AmoCRMWebhookPayload;
       try {
+        logger.info({ body: req.body }, '🔍 Валидация webhook payload');
         payload = validateWebhookRequest(req);
+        logger.info({ accountId: payload.account_id, chatId: payload.chat_id, hasMessage: !!payload.message }, '✅ Payload валидирован');
       } catch (err) {
+        logger.error({ err, body: req.body, errorMessage: err instanceof Error ? err.message : 'Unknown' }, '❌ Ошибка валидации webhook payload');
         if (err instanceof AmoCRMError) {
           res.status(err.statusCode).json({ error: err.message, code: err.code });
           return;
