@@ -271,7 +271,6 @@ export function createWebServer(
             accountId: account.accountId,
             whatsapp: {
               connected: account.connected,
-              status: account.status,
               lastError: account.lastError || null,
             },
             amocrm: {
