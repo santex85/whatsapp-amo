@@ -155,21 +155,25 @@ export function createWebServer(
           accountId, 
           chatId: webhookPayload.chat_id,
           hasAttachments: !!webhookPayload.message.attachments?.length,
-          messageLength: webhookPayload.message.content?.length || 0
+          messageLength: webhookPayload.message.content?.length || 0,
+          messagePreview: webhookPayload.message.content?.substring(0, 50)
         },
         '📤 Обработка webhook сообщения от amoCRM'
       );
 
       // Обрабатываем асинхронно, чтобы быстро ответить amoCRM
       onWebhookMessage(webhookPayload).catch((err) => {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        const errorStack = err instanceof Error ? err.stack : undefined;
         logger.error({ 
           err, 
           scopeId, 
           accountId, 
           chatId: webhookPayload.chat_id,
-          errorMessage: err instanceof Error ? err.message : 'Unknown error',
-          errorStack: err instanceof Error ? err.stack : undefined
+          errorMessage,
+          errorStack
         }, '❌ Ошибка обработки webhook сообщения');
+        console.error(`[ERROR] Webhook processing failed: ${errorMessage}`, err);
       });
 
       // Отвечаем сразу, чтобы amoCRM не считал запрос неудачным

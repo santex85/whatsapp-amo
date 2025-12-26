@@ -127,19 +127,33 @@ export class WhatsAppClient {
 
   async sendMessage(to: string, message: string, options?: { mediaUrl?: string; mediaType?: string }): Promise<void> {
     if (!this.sock) {
-      throw new Error('WhatsApp client not connected');
+      const error = new Error('WhatsApp client not connected');
+      logger.error({ accountId: this.accountId, to, errorMessage: error.message }, '❌ Cannot send message: client not connected');
+      throw error;
     }
 
     try {
+      logger.info({ accountId: this.accountId, to, messageLength: message.length, messagePreview: message.substring(0, 50) }, '📤 Sending message via WhatsApp client');
+      
       if (options?.mediaUrl && options?.mediaType) {
         // Отправка медиа будет обработана в media/uploader.ts
         throw new Error('Media sending not implemented in client, use media handler');
       } else {
         await this.sock.sendMessage(to, { text: message });
-        logger.info({ accountId: this.accountId, to }, 'Message sent');
+        logger.info({ accountId: this.accountId, to, messageLength: message.length }, '✅ Message sent successfully via WhatsApp');
       }
     } catch (err) {
-      logger.error({ err, accountId: this.accountId, to }, 'Failed to send message');
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const errorStack = err instanceof Error ? err.stack : undefined;
+      logger.error({ 
+        err, 
+        accountId: this.accountId, 
+        to,
+        messageLength: message.length,
+        errorMessage,
+        errorStack
+      }, '❌ Failed to send message via WhatsApp client');
+      console.error(`[ERROR] WhatsApp sendMessage failed: ${errorMessage}`, err);
       throw err;
     }
   }

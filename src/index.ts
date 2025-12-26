@@ -258,7 +258,17 @@ queueProcessor.registerProcessor('outgoing', async (message: QueueMessage) => {
 
     logger.info({ accountId: message.accountId, to: data.to }, '✅ Сообщение успешно отправлено в WhatsApp');
   } catch (err) {
-    logger.error({ err, accountId: message.accountId }, 'Failed to send message to WhatsApp');
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    const errorStack = err instanceof Error ? err.stack : undefined;
+    logger.error({ 
+      err, 
+      accountId: message.accountId,
+      to: data.to,
+      messagePreview: data.message?.substring(0, 50),
+      errorMessage,
+      errorStack
+    }, '❌ Ошибка отправки сообщения в WhatsApp');
+    console.error(`[ERROR] Failed to send message to WhatsApp: ${errorMessage}`, err);
     throw err;
   }
 });
