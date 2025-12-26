@@ -9,17 +9,49 @@ export function validateWebhookRequest(req: Request): AmoCRMWebhookPayload {
     throw new AmoCRMError('Empty request body', 'INVALID_REQUEST', 400);
   }
 
-  const { account_id, chat_id, message } = req.body;
+  const { account_id, message } = req.body;
 
-  if (!account_id || !chat_id || !message) {
-    throw new AmoCRMError('Missing required fields', 'INVALID_REQUEST', 400);
+  if (!account_id || !message) {
+    throw new AmoCRMError('Missing required fields: account_id or message', 'INVALID_REQUEST', 400);
   }
 
-  if (!message.content) {
-    throw new AmoCRMError('Message content is required', 'INVALID_REQUEST', 400);
+  // amoCRM отправляет данные в формате:
+  // { account_id, message: { receiver: { phone, client_id }, message: { text } } }
+  // Преобразуем в наш формат: { account_id, chat_id, message: { content } }
+  
+  let chat_id: string;
+  let content: string;
+
+  // Проверяем новый формат (с receiver и message.message.text)
+  if (message.receiver && message.receiver.phone) {
+    chat_id = message.receiver.phone;
+    // Проверяем наличие текста в message.message.text
+    if (message.message && message.message.text) {
+      content = message.message.text;
+    } else {
+      throw new AmoCRMError('Message text is required (message.message.text)', 'INVALID_REQUEST', 400);
+    }
+  } 
+  // Проверяем старый формат (для обратной совместимости)
+  else if (req.body.chat_id && message.content) {
+    chat_id = req.body.chat_id;
+    content = message.content;
+  } else {
+    throw new AmoCRMError('Missing required fields: chat_id/receiver.phone or message.content/message.message.text', 'INVALID_REQUEST', 400);
   }
 
-  return req.body as AmoCRMWebhookPayload;
+  // Возвращаем нормализованный формат
+  return {
+    account_id,
+    chat_id,
+    message: {
+      content,
+      attachments: message.message?.media ? [{
+        url: message.message.media,
+        type: message.message.type || 'unknown'
+      }] : undefined
+    }
+  } as AmoCRMWebhookPayload;
 }
 
 export function handleAmoCRMWebhook(
