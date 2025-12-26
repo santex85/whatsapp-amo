@@ -213,6 +213,14 @@ queueProcessor.registerProcessor('incoming', async (message: QueueMessage) => {
 
 queueProcessor.registerProcessor('outgoing', async (message: QueueMessage) => {
   const data = message.data as OutgoingMessageData;
+  
+  logger.info({ 
+    accountId: message.accountId, 
+    to: data.to,
+    messagePreview: data.message?.substring(0, 50),
+    queueMessageId: message.id
+  }, '🔄 Начало обработки исходящего сообщения из очереди');
+  console.log(`[DEBUG] 🔄 Обработка исходящего сообщения из очереди: account=${message.accountId}, to=${data.to}`);
 
   // Anti-ban: проверка rate limit
   if (!(await messageRateLimiter.checkLimit(message.accountId))) {
