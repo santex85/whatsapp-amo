@@ -144,18 +144,36 @@ export function setupMessageHandler(
     }
   });
 
-  // Обработка ошибок отправки
+  // Обработка статусов отправки сообщений
   sock.ev.on('messages.update', (updates) => {
     for (const update of updates) {
       if (update.update?.status) {
-        logger.debug(
-          { 
-            accountId, 
-            messageId: update.key?.id,
-            status: update.update.status 
-          },
-          'Message status updated'
-        );
+        const status = update.update.status;
+        const messageId = update.key?.id;
+        
+        // Логируем статусы доставки для диагностики
+        const statusString = String(status);
+        if (statusString.includes('ERROR') || statusString.includes('FAILED') || status === 3 || status === 4) {
+          logger.error(
+            { 
+              accountId, 
+              messageId,
+              status,
+              from: update.key?.remoteJid
+            },
+            '❌ Сообщение не доставлено (статус ERROR/FAILED)'
+          );
+        } else {
+          logger.info(
+            { 
+              accountId, 
+              messageId,
+              status,
+              from: update.key?.remoteJid
+            },
+            `📬 Статус сообщения: ${status}`
+          );
+        }
       }
     }
   });
