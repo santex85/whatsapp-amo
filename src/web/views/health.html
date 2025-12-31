@@ -296,11 +296,14 @@
                     accountsHtml += '</div>';
                 }
                 
+                // Определяем статус синхронизации (с дефолтным значением)
+                const syncEnabled = (data.syncHistory && data.syncHistory.enabled) || false;
+                
                 container.innerHTML = `
                     <div class="status-grid">
                         <div class="status-item">
                             <span class="status-label">Статус системы</span>
-                            <span class="status-value status-ok">✅ ${data.status.toUpperCase()}</span>
+                            <span class="status-value status-ok">✅ ${(data.status || 'ok').toUpperCase()}</span>
                         </div>
                         <div class="status-item">
                             <span class="status-label">Время сервера</span>
@@ -312,22 +315,22 @@
                         ${data.summary ? `
                         <div class="status-item">
                             <span class="status-label">Всего аккаунтов</span>
-                            <span class="status-value">${data.summary.totalAccounts}</span>
+                            <span class="status-value">${data.summary.totalAccounts || 0}</span>
                         </div>
                         <div class="status-item">
                             <span class="status-label">WhatsApp подключено</span>
-                            <span class="status-value ${data.summary.whatsappConnected === data.summary.totalAccounts ? 'status-ok' : 'status-warning'}">${data.summary.whatsappConnected} / ${data.summary.totalAccounts}</span>
+                            <span class="status-value ${data.summary.whatsappConnected === data.summary.totalAccounts ? 'status-ok' : 'status-warning'}">${data.summary.whatsappConnected || 0} / ${data.summary.totalAccounts || 0}</span>
                         </div>
                         <div class="status-item">
                             <span class="status-label">amoCRM настроено</span>
-                            <span class="status-value ${data.summary.amocrmConfigured === data.summary.totalAccounts ? 'status-ok' : 'status-warning'}">${data.summary.amocrmConfigured} / ${data.summary.totalAccounts}</span>
+                            <span class="status-value ${data.summary.amocrmConfigured === data.summary.totalAccounts ? 'status-ok' : 'status-warning'}">${data.summary.amocrmConfigured || 0} / ${data.summary.totalAccounts || 0}</span>
                         </div>
                         ` : ''}
-                        <div class="status-item" style="border: 2px solid ${(data.syncHistory && data.syncHistory.enabled) ? '#4CAF50' : '#999'};">
+                        <div class="status-item" style="border: 2px solid ${syncEnabled ? '#4CAF50' : '#999'};">
                             <span class="status-label">📥 Синхронизация истории WhatsApp</span>
                             <label style="cursor: pointer; display: flex; align-items: center; gap: 10px;">
-                                <span class="status-value ${(data.syncHistory && data.syncHistory.enabled) ? 'status-ok' : ''}">${(data.syncHistory && data.syncHistory.enabled) ? '✅ Включена' : '❌ Выключена'}</span>
-                                <input type="checkbox" id="syncHistoryToggle" ${(data.syncHistory && data.syncHistory.enabled) ? 'checked' : ''} onchange="toggleSyncHistory(this.checked)" style="width: 40px; height: 20px; cursor: pointer;">
+                                <span class="status-value ${syncEnabled ? 'status-ok' : ''}">${syncEnabled ? '✅ Включена' : '❌ Выключена'}</span>
+                                <input type="checkbox" id="syncHistoryToggle" ${syncEnabled ? 'checked' : ''} onchange="toggleSyncHistory(this.checked)" style="width: 40px; height: 20px; cursor: pointer;">
                             </label>
                         </div>
                     </div>
