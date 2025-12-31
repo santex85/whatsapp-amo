@@ -80,23 +80,18 @@ export function setupMessageHandler(
           const phoneNumber = from.split('@')[0];
           const pushName = msg.pushName || null;
 
-          // Извлекаем текст сообщения
-          let messageText: string | null = null;
-          if (messageContent.conversation) {
-            messageText = messageContent.conversation;
-          } else if (messageContent.extendedTextMessage?.text) {
-            messageText = messageContent.extendedTextMessage.text;
-          }
-
           // Обрабатываем медиафайлы
           let mediaType: string | undefined;
           let mediaUrl: string | undefined;
           let mediaMimetype: string | undefined;
+          let mediaCaption: string | undefined;
 
           if (messageType && ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage'].includes(messageType)) {
             mediaType = messageType;
             const mediaMessage = messageContent[messageType as keyof WAMessageContent] as any;
             mediaMimetype = mediaMessage?.mimetype;
+            // Извлекаем подпись (caption) из медиафайла, если есть
+            mediaCaption = mediaMessage?.caption || undefined;
 
             try {
               // Сохраняем информацию о медиа - фактическое скачивание будет в media/downloader.ts
@@ -105,6 +100,17 @@ export function setupMessageHandler(
             } catch (err) {
               logger.error({ err, accountId, messageId: msg.key.id }, 'Failed to process media');
             }
+          }
+
+          // Извлекаем текст сообщения
+          let messageText: string | null = null;
+          if (messageContent.conversation) {
+            messageText = messageContent.conversation;
+          } else if (messageContent.extendedTextMessage?.text) {
+            messageText = messageContent.extendedTextMessage.text;
+          } else if (mediaCaption) {
+            // Если есть медиа с подписью, используем подпись как текст сообщения
+            messageText = mediaCaption;
           }
 
           const incomingMessage: IncomingMessage = {

@@ -60,7 +60,29 @@ async function handleIncomingMessage(message: IncomingMessage): Promise<void> {
     // Явный вывод для отладки - используем и stdout, и console.log
     process.stdout.write(`\n[DEBUG] 📥 Получено сообщение от ${message.phoneNumber} для аккаунта ${message.accountId}\n`);
     console.log(`[DEBUG] 📥 Получено сообщение от ${message.phoneNumber} для аккаунта ${message.accountId}`);
-    logger.info({ accountId: message.accountId, from: message.phoneNumber }, '📥 Обработка входящего сообщения');
+    logger.info({ accountId: message.accountId, from: message.phoneNumber, hasMedia: !!message.mediaType }, '📥 Обработка входящего сообщения');
+
+    // Скачиваем медиафайлы сразу, если они есть
+    let mediaFilePath: string | undefined;
+    if (message.mediaType && message.originalMessage) {
+      try {
+        const client = manager.getAccount(message.accountId);
+        if (client && client.getSocket()) {
+          logger.info({ accountId: message.accountId, mediaType: message.mediaType }, '📥 Скачивание медиафайла из WhatsApp');
+          const mediaResult = await mediaDownloader.downloadFromWhatsApp(
+            client.getSocket()!,
+            message
+          );
+          if (mediaResult) {
+            mediaFilePath = mediaResult.filePath;
+            logger.info({ accountId: message.accountId, filePath: mediaFilePath, fileName: mediaResult.fileName }, '✅ Медиафайл скачан');
+          }
+        }
+      } catch (err) {
+        logger.error({ err, accountId: message.accountId, mediaType: message.mediaType }, '❌ Ошибка скачивания медиафайла');
+        // Продолжаем обработку сообщения даже если медиа не скачалось
+      }
+    }
 
     // Постановка в очередь
     const queueMessage: QueueMessage = {
@@ -74,7 +96,7 @@ async function handleIncomingMessage(message: IncomingMessage): Promise<void> {
         pushName: message.pushName,
         message: message.message,
         mediaType: message.mediaType,
-        mediaUrl: message.mediaUrl,
+        mediaUrl: mediaFilePath, // Сохраняем путь к скачанному файлу вместо 'pending'
         mediaMimetype: message.mediaMimetype,
         timestamp: message.timestamp,
       } as IncomingMessageData,
@@ -176,7 +198,15 @@ queueProcessor.registerProcessor('incoming', async (message: QueueMessage) => {
   }
   
   // Явный вывод для отладки
-  console.log(`[DEBUG] 🔄 Обработка сообщения из очереди: ${data.phoneNumber} (аккаунт: ${message.accountId})`);
+  console.log(`[DEBUG] 🔄 Обработка сообщения из очереди: ${data.phoneNumber} (аккаунт: ${message.accountId}), текст: "${data.message?.substring(0, 50) || '(нет текста)'}", медиа: ${data.mediaType || 'нет'}`);
+  logger.info({ 
+    accountId: message.accountId, 
+    phoneNumber: data.phoneNumber, 
+    hasMessage: !!data.message,
+    messagePreview: data.message?.substring(0, 100),
+    hasMedia: !!data.mediaType,
+    mediaType: data.mediaType
+  }, '🔄 Обработка входящего сообщения из очереди');
   
   // Anti-ban: случайная задержка
   await randomDelay();
@@ -196,29 +226,42 @@ queueProcessor.registerProcessor('incoming', async (message: QueueMessage) => {
   try {
     // Обработка медиафайлов (если есть)
     let mediaUrl: string | undefined;
-    if (data.mediaType) {
-      logger.info({ accountId: message.accountId, mediaType: data.mediaType }, 'Processing media file');
-      
-      // Для полной обработки медиа нужно:
-      // 1. В обработчике сообщений сохранять оригинальное сообщение
-      // 2. Скачивать медиа сразу при получении сообщения
-      // 3. Сохранять путь к файлу в очереди
-      // 4. Загружать в amoCRM и получать публичную ссылку
-      // Здесь упрощенная версия - медиа будет обработано позже
+    if (data.mediaType && data.mediaUrl && data.mediaUrl !== 'pending') {
+      // data.mediaUrl содержит путь к скачанному файлу
+      try {
+        logger.info({ accountId: message.accountId, mediaType: data.mediaType, filePath: data.mediaUrl }, '📤 Загрузка медиафайла в amoCRM');
+        mediaUrl = await mediaUploader.uploadToAmoCRM(
+          amocrmAPI,
+          data.mediaUrl,
+          message.accountId
+        );
+        logger.info({ accountId: message.accountId, mediaUrl }, '✅ Медиафайл загружен в amoCRM');
+      } catch (err) {
+        logger.error({ err, accountId: message.accountId, mediaType: data.mediaType, filePath: data.mediaUrl }, '❌ Ошибка загрузки медиафайла в amoCRM');
+        // Продолжаем отправку сообщения без медиа, если загрузка не удалась
+      }
     }
 
     // Отправка в amoCRM
+    // Если есть медиа, но нет текста, используем placeholder
+    const messageText = data.message || (mediaUrl ? '📎 Медиафайл' : '');
+    
     await amocrmAPI.sendMessage(
       data.phoneNumber, // chat_id в amoCRM
-      data.message || '',
+      messageText,
       {
         uniq: `wa_${data.timestamp}`,
         attachments: mediaUrl ? [{ url: mediaUrl, type: data.mediaType || 'unknown' }] : undefined,
       }
     );
 
-    console.log(`[DEBUG] ✅ Сообщение отправлено в amoCRM: ${data.phoneNumber}`);
-    logger.info({ accountId: message.accountId, phoneNumber: data.phoneNumber }, '✅ Сообщение отправлено в amoCRM');
+    console.log(`[DEBUG] ✅ Сообщение отправлено в amoCRM: ${data.phoneNumber}, текст: "${messageText.substring(0, 50)}", медиа: ${mediaUrl ? 'да' : 'нет'}`);
+    logger.info({ 
+      accountId: message.accountId, 
+      phoneNumber: data.phoneNumber, 
+      hasMedia: !!mediaUrl,
+      messageLength: messageText.length
+    }, '✅ Сообщение отправлено в amoCRM');
   } catch (err) {
     logger.error({ err, accountId: message.accountId }, 'Failed to send message to amoCRM');
     throw err;
