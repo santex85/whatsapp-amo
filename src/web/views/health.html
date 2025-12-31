@@ -133,6 +133,59 @@
             padding: 40px;
             color: #666;
         }
+        .logs-container {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #333;
+        }
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        .log-error {
+            color: #f48771;
+        }
+        .log-warn {
+            color: #dcdcaa;
+        }
+        .log-info {
+            color: #4ec9b0;
+        }
+        .log-timestamp {
+            color: #858585;
+            margin-right: 10px;
+        }
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .logs-controls {
+            display: flex;
+            gap: 10px;
+        }
+        .logs-toggle {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .logs-toggle:hover {
+            background: #5568d3;
+        }
     </style>
 </head>
 <body>
@@ -145,7 +198,23 @@
             <div id="statusContainer" class="loading">
                 Загрузка статуса...
             </div>
+            <div id="logsContainer" style="display: none; margin-top: 30px;">
+                <div class="logs-header">
+                    <h2 style="color: #333; margin: 0;">📋 Последние логи</h2>
+                    <div class="logs-controls">
+                        <select id="logLevel" style="padding: 6px; border-radius: 4px; border: 1px solid #ddd;">
+                            <option value="all">Все</option>
+                            <option value="error">Только ошибки</option>
+                        </select>
+                        <button class="logs-toggle" onclick="toggleLogs()">Скрыть логи</button>
+                    </div>
+                </div>
+                <div id="logsContent" class="logs-container">
+                    Загрузка логов...
+                </div>
+            </div>
             <a href="/" class="btn">← Назад</a>
+            <button class="btn" onclick="toggleLogs()" style="margin-left: 10px; background: #667eea;">📋 Показать логи</button>
         </div>
     </div>
 
@@ -261,11 +330,100 @@
             }
         }
         
+        let logsVisible = false;
+        
+        async function loadLogs() {
+            const logsContent = document.getElementById('logsContent');
+            if (!logsVisible || !logsContent) return;
+            
+            try {
+                const level = document.getElementById('logLevel')?.value || 'all';
+                const response = await fetch(`/api/logs?limit=30&level=${level}`, {
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        logsContent.innerHTML = '<div style="color: #f48771;">⚠️ Требуется авторизация для просмотра логов</div>';
+                        return;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.logs && data.logs.length > 0) {
+                    let logsHtml = '';
+                    data.logs.forEach(log => {
+                        const date = new Date(log.timestamp);
+                        const timeStr = date.toLocaleTimeString('ru-RU');
+                        const levelClass = `log-${log.level}`;
+                        const levelIcon = log.level === 'error' ? '❌' : log.level === 'warn' ? '⚠️' : 'ℹ️';
+                        
+                        logsHtml += `
+                            <div class="log-entry ${levelClass}">
+                                <span class="log-timestamp">[${timeStr}]</span>
+                                <span>${levelIcon}</span>
+                                <span>${escapeHtml(log.message)}</span>
+                            </div>
+                        `;
+                    });
+                    logsContent.innerHTML = logsHtml;
+                    // Прокручиваем вниз
+                    logsContent.scrollTop = logsContent.scrollHeight;
+                } else {
+                    logsContent.innerHTML = '<div style="color: #858585;">Логи не найдены</div>';
+                }
+            } catch (err) {
+                logsContent.innerHTML = `<div style="color: #f48771;">Ошибка загрузки логов: ${err.message}</div>`;
+            }
+        }
+        
+        function toggleLogs() {
+            logsVisible = !logsVisible;
+            const logsContainer = document.getElementById('logsContainer');
+            const buttons = document.querySelectorAll('button, .btn');
+            
+            if (logsContainer) {
+                logsContainer.style.display = logsVisible ? 'block' : 'none';
+                
+                // Обновляем текст кнопок
+                buttons.forEach(btn => {
+                    if (btn.textContent.includes('логов')) {
+                        btn.textContent = logsVisible ? '📋 Скрыть логи' : '📋 Показать логи';
+                    }
+                });
+                
+                if (logsVisible) {
+                    loadLogs();
+                    // Автообновление логов каждые 3 секунды
+                    if (window.logsInterval) clearInterval(window.logsInterval);
+                    window.logsInterval = setInterval(loadLogs, 3000);
+                } else {
+                    if (window.logsInterval) clearInterval(window.logsInterval);
+                }
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
         // Загружаем статус при загрузке страницы
         loadStatus();
         
-        // Автообновление каждые 5 секунд
+        // Автообновление статуса каждые 5 секунд
         setInterval(loadStatus, 5000);
+        
+        // Обновляем логи при изменении уровня
+        document.addEventListener('DOMContentLoaded', () => {
+            const logLevel = document.getElementById('logLevel');
+            if (logLevel) {
+                logLevel.addEventListener('change', loadLogs);
+            }
+        });
     </script>
 </body>
 </html>

@@ -55,7 +55,7 @@ export class WhatsAppClient {
         },
         // Настройки для обработки сообщений
         markOnlineOnConnect: true,
-        syncFullHistory: false, // Не синхронизируем всю историю
+        syncFullHistory: process.env.WHATSAPP_SYNC_HISTORY === 'true', // Синхронизация истории (можно включить через переменную окружения)
         generateHighQualityLinkPreview: false,
       });
 

@@ -40,9 +40,25 @@ export function setupMessageHandler(
     // notify - новые сообщения
     // append - сообщения из истории
     if (type === 'notify' || type === 'append') {
-      console.log(`[DEBUG] ✅ Тип notify - обрабатываем ${messages.length} сообщений`);
+      console.log(`[DEBUG] ✅ Тип ${type} - обрабатываем ${messages.length} сообщений`);
+      
+      // Для сообщений из истории (append) пропускаем старые сообщения (старше 1 часа)
+      // чтобы не дублировать их в amoCRM
+      const historySyncThreshold = 60 * 60 * 1000; // 1 час
+      const now = Date.now();
+      
       for (const msg of messages) {
         try {
+          // Проверяем время сообщения для истории
+          if (type === 'append') {
+            const messageTimestamp = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : 0;
+            const messageAge = now - messageTimestamp;
+            if (messageAge > historySyncThreshold) {
+              console.log(`[DEBUG] ⏭️ Пропущено: старое сообщение из истории (возраст: ${Math.round(messageAge / 1000 / 60)} минут)`);
+              continue;
+            }
+          }
+          
           console.log(`[DEBUG] 🔍 Обработка сообщения: from=${msg.key.remoteJid}, fromMe=${msg.key.fromMe}`);
           
           // Пропускаем сообщения, которые мы сами отправили (fromMe === true)
