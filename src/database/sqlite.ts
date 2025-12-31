@@ -61,6 +61,12 @@ export function initDatabase(): DatabaseType {
       FOREIGN KEY (account_id) REFERENCES amocrm_tokens(account_id)
     );
 
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_amocrm_tokens_expires_at ON amocrm_tokens(expires_at);
     CREATE INDEX IF NOT EXISTS idx_amocrm_conversations_lookup ON amocrm_conversations(account_id, phone_number);
   `);
@@ -370,5 +376,55 @@ export function getConversationId(accountId: string, phoneNumber: string): strin
     LIMIT 1
   `).get(accountId, phoneNumber) as { conversation_id: string } | undefined;
   return row?.conversation_id || null;
+}
+
+/**
+ * Получает значение настройки
+ * @param key - ключ настройки
+ * @returns значение настройки или null если не найдено
+ */
+export function getSetting(key: string): string | null {
+  const db = getDatabase();
+  const row = db.prepare('SELECT value FROM settings WHERE key = ? LIMIT 1').get(key) as { value: string } | undefined;
+  return row?.value || null;
+}
+
+/**
+ * Устанавливает значение настройки
+ * @param key - ключ настройки
+ * @param value - значение настройки
+ */
+export function setSetting(key: string, value: string): void {
+  const db = getDatabase();
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at)
+    VALUES (?, ?, strftime('%s', 'now'))
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_at = strftime('%s', 'now')
+  `).run(key, value);
+  logger.debug({ key, value }, 'Setting saved');
+}
+
+/**
+ * Получает статус синхронизации истории WhatsApp
+ * @returns true если синхронизация включена, false иначе
+ */
+export function getSyncHistoryEnabled(): boolean {
+  const value = getSetting('whatsapp_sync_history');
+  // Если настройка не установлена, используем значение из переменной окружения или false
+  if (value === null) {
+    return process.env.WHATSAPP_SYNC_HISTORY === 'true';
+  }
+  return value === 'true';
+}
+
+/**
+ * Устанавливает статус синхронизации истории WhatsApp
+ * @param enabled - включить или выключить синхронизацию
+ */
+export function setSyncHistoryEnabled(enabled: boolean): void {
+  setSetting('whatsapp_sync_history', enabled ? 'true' : 'false');
+  logger.info({ enabled }, 'Sync history setting updated');
 }
 

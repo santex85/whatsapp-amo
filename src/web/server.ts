@@ -358,12 +358,47 @@ export function createWebServer(
     }
   });
 
+  // API для управления синхронизацией истории
+  app.get('/api/sync-history', requireAuth, async (_req: Request, res: Response): Promise<void> => {
+    try {
+      const { getSyncHistoryEnabled } = await import('../database/sqlite');
+      const enabled = getSyncHistoryEnabled();
+      res.json({ enabled });
+    } catch (err) {
+      logger.error({ err }, 'Failed to get sync history status');
+      res.status(500).json({ error: 'Failed to get sync history status' });
+    }
+  });
+
+  app.post('/api/sync-history', requireAuth, async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { setSyncHistoryEnabled } = await import('../database/sqlite');
+      const { enabled } = req.body;
+      
+      if (typeof enabled !== 'boolean') {
+        res.status(400).json({ error: 'enabled must be a boolean' });
+        return;
+      }
+      
+      setSyncHistoryEnabled(enabled);
+      logger.info({ enabled }, 'Sync history setting updated via API');
+      
+      res.json({ 
+        enabled,
+        message: enabled ? 'Синхронизация истории включена. Изменения вступят в силу при следующем подключении аккаунта.' : 'Синхронизация истории выключена. Изменения вступят в силу при следующем подключении аккаунта.'
+      });
+    } catch (err) {
+      logger.error({ err }, 'Failed to update sync history status');
+      res.status(500).json({ error: 'Failed to update sync history status' });
+    }
+  });
+
   // Health check - HTML страница
   app.get('/health', async (req: Request, res: Response): Promise<void> => {
     // Если запрос с Accept: application/json, возвращаем JSON с детальной информацией
     if (req.get('Accept')?.includes('application/json')) {
       try {
-        const { getAmoCRMTokens } = await import('../database/sqlite');
+        const { getAmoCRMTokens, getSyncHistoryEnabled } = await import('../database/sqlite');
         const accounts = manager.getAllAccountStatuses();
         
         const accountsWithStatus = accounts.map(account => {
@@ -385,10 +420,15 @@ export function createWebServer(
           };
         });
         
+        const syncHistoryEnabled = getSyncHistoryEnabled();
+        
         res.json({ 
           status: 'ok', 
           timestamp: new Date().toISOString(),
           accounts: accountsWithStatus,
+          syncHistory: {
+            enabled: syncHistoryEnabled,
+          },
           summary: {
             totalAccounts: accounts.length,
             whatsappConnected: accounts.filter(a => a.connected).length,

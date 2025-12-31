@@ -3,6 +3,7 @@ import logger from '../utils/logger';
 import { createAuthState } from './storage';
 import { setupConnectionHandler } from './handlers/connection';
 import { setupMessageHandler, IncomingMessage } from './handlers/messages';
+import { getSyncHistoryEnabled } from '../database/sqlite';
 
 export interface WhatsAppClientOptions {
   accountId: string;
@@ -55,7 +56,7 @@ export class WhatsAppClient {
         },
         // Настройки для обработки сообщений
         markOnlineOnConnect: true,
-        syncFullHistory: process.env.WHATSAPP_SYNC_HISTORY === 'true', // Синхронизация истории (можно включить через переменную окружения)
+        syncFullHistory: getSyncHistoryEnabled(), // Синхронизация истории (из БД или переменной окружения)
         generateHighQualityLinkPreview: false,
       });
 
