@@ -1,4 +1,5 @@
 import makeWASocket, { WASocket, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
+import pino from 'pino';
 import logger from '../utils/logger';
 import { createAuthState } from './storage';
 import { setupConnectionHandler } from './handlers/connection';
@@ -43,12 +44,19 @@ export class WhatsAppClient {
       const { state, saveCreds } = await createAuthState(this.accountId);
       const { version } = await fetchLatestBaileysVersion();
 
+      // Создаем отдельный logger с уровнем warn для Baileys, чтобы уменьшить шум от Bad MAC ошибок
+      // Эти ошибки нормальны для WhatsApp Signal Protocol и обрабатываются автоматически
+      // Bad MAC возникает при попытке расшифровать сообщения с устаревшими/невалидными сессиями
+      const baileysLogger = pino({
+        level: 'warn', // Показываем только предупреждения и ошибки, игнорируем debug/info от libsignal
+        // Не используем transport для этого logger, чтобы избежать дублирования
+      });
+      
       this.sock = makeWASocket({
         auth: state,
         version,
-        // Включаем вывод QR в терминал для отладки (веб-интерфейс всё равно получит QR через событие)
-        printQRInTerminal: true,
-        logger: logger.child({ accountId: this.accountId }),
+        // printQRInTerminal удален (deprecated), QR код получаем через событие connection.update
+        logger: baileysLogger,
         browser: ['Desktop', 'Chrome', '10.0.0'],
         getMessage: async () => {
           // Для получения сообщений из истории (опционально)
