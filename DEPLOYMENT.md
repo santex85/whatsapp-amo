@@ -314,3 +314,4 @@ sudo systemctl start whatsapp-amo
 - См. [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) для решения проблем
 - См. [AMOCRM_CHANNEL_SETUP.md](./AMOCRM_CHANNEL_SETUP.md) для настройки канала
 - См. [TROUBLESHOOTING_LOGS.md](./TROUBLESHOOTING_LOGS.md) для работы с логами
+
