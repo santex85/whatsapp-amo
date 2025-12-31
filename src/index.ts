@@ -50,6 +50,13 @@ const queueProcessor = new QueueProcessor(queue);
 // Обработчик входящих сообщений (WhatsApp → amoCRM)
 async function handleIncomingMessage(message: IncomingMessage): Promise<void> {
   try {
+    // Пропускаем групповые чаты - они не должны попадать в amoCRM
+    if (message.isGroup) {
+      console.log(`[DEBUG] ⏭️ Пропущено групповое сообщение от ${message.phoneNumber} (аккаунт: ${message.accountId})`);
+      logger.info({ accountId: message.accountId, from: message.phoneNumber }, '⏭️ Пропущено групповое сообщение - не отправляется в amoCRM');
+      return;
+    }
+
     // Явный вывод для отладки - используем и stdout, и console.log
     process.stdout.write(`\n[DEBUG] 📥 Получено сообщение от ${message.phoneNumber} для аккаунта ${message.accountId}\n`);
     console.log(`[DEBUG] 📥 Получено сообщение от ${message.phoneNumber} для аккаунта ${message.accountId}`);
@@ -160,6 +167,13 @@ async function handleOutgoingMessage(payload: AmoCRMWebhookPayload): Promise<voi
 // Регистрация обработчиков очереди
 queueProcessor.registerProcessor('incoming', async (message: QueueMessage) => {
   const data = message.data as IncomingMessageData;
+  
+  // Дополнительная проверка: пропускаем групповые чаты (по адресу from, который содержит @g.us для групп)
+  if (data.from?.endsWith('@g.us')) {
+    console.log(`[DEBUG] ⏭️ Пропущено групповое сообщение из очереди: ${data.from} (аккаунт: ${message.accountId})`);
+    logger.info({ accountId: message.accountId, from: data.from }, '⏭️ Пропущено групповое сообщение из очереди - не отправляется в amoCRM');
+    return;
+  }
   
   // Явный вывод для отладки
   console.log(`[DEBUG] 🔄 Обработка сообщения из очереди: ${data.phoneNumber} (аккаунт: ${message.accountId})`);
