@@ -465,17 +465,48 @@ export class AmoCRMAPI {
         );
       }
 
-      // Нормализуем chatId
+      // Нормализуем chatId - убираем префиксы и нецифровые символы
+      // chatId может быть в формате: "79261234567", "7926-1234-5678", "79261234567@s.whatsapp.net" и т.д.
       const normalizedChatId = chatId.split('-')[0].split('@')[0];
+      // Извлекаем только цифры для единообразного хранения в БД
       const phoneNumber = normalizedChatId.replace(/[^0-9]/g, '');
+      
+      if (!phoneNumber || phoneNumber.length === 0) {
+        throw new AmoCRMError(
+          `Invalid phone number extracted from chatId: ${chatId}`,
+          'INVALID_PHONE_NUMBER',
+          400
+        );
+      }
       
       // Пытаемся получить сохраненный conversation_id из БД
       const savedConversationId = getConversationId(this.accountId, phoneNumber);
       // Используем сохраненный conversation_id, если есть, иначе используем номер телефона
       const conversationIdToUse = savedConversationId || normalizedChatId;
       
+      if (savedConversationId) {
+        logger.info(
+          { 
+            accountId: this.accountId, 
+            phoneNumber,
+            savedConversationId,
+            conversationIdToUse,
+          },
+          '✅ Используется сохраненный conversation_id для существующего чата'
+        );
+      } else {
+        logger.info(
+          { 
+            accountId: this.accountId, 
+            phoneNumber,
+            conversationIdToUse: normalizedChatId,
+          },
+          '🆕 Conversation_id не найден, будет создан новый чат'
+        );
+      }
+      
       // #region agent log
-      logger.info(
+      logger.debug(
         { 
           accountId: this.accountId, 
           originalChatId: chatId, 
@@ -484,7 +515,7 @@ export class AmoCRMAPI {
           savedConversationId,
           conversationIdToUse,
           scopeId: finalScopeId, 
-          content,
+          content: content.substring(0, 50),
           scopeIdLength: finalScopeId?.length,
           scopeIdFormat: finalScopeId?.includes('_') ? 'two_uuid' : 'single_uuid'
         },
@@ -505,10 +536,10 @@ export class AmoCRMAPI {
             conversation_id: conversationIdToUse,
             timestamp: Math.floor(Date.now() / 1000),
             sender: {
-              id: normalizedChatId,
+              id: conversationIdToUse,
               name: `WhatsApp ${normalizedChatId}`,
               profile: {
-                phone: normalizedChatId.replace(/[^0-9]/g, ''),
+                phone: phoneNumber,
               },
             },
             message: {
@@ -519,14 +550,14 @@ export class AmoCRMAPI {
         },
         // Вариант 2: Без event_type, поля напрямую (альтернативный)
         {
-          conversation_id: normalizedChatId,
+          conversation_id: conversationIdToUse,
           msgid: options?.uniq || `wa_${Date.now()}`,
           timestamp: Math.floor(Date.now() / 1000),
           sender: {
-            id: normalizedChatId,
+            id: conversationIdToUse,
             name: `WhatsApp ${normalizedChatId}`,
             profile: {
-              phone: normalizedChatId.replace(/[^0-9]/g, ''),
+              phone: phoneNumber,
             },
           },
           message: {
@@ -541,12 +572,12 @@ export class AmoCRMAPI {
             text: content,
             msgid: options?.uniq || `wa_${Date.now()}`,
           },
-          conversation_id: normalizedChatId,
+          conversation_id: conversationIdToUse,
           sender: {
-            id: normalizedChatId,
+            id: conversationIdToUse,
             name: `WhatsApp ${normalizedChatId}`,
             profile: {
-              phone: normalizedChatId.replace(/[^0-9]/g, ''),
+              phone: phoneNumber,
             },
           },
         },
@@ -679,17 +710,41 @@ export class AmoCRMAPI {
           // Сохраняем conversation_id из ответа, если есть
           let returnedConversationId: string | undefined;
           if (response.data && typeof response.data === 'object') {
-            // Формат ответа: { new_message: { conversation_id: "uuid", ... } }
-            const phoneNum = normalizedChatId.replace(/[^0-9]/g, '');
-            if (response.data.new_message?.conversation_id && phoneNum && phoneNum.length > 0) {
-              returnedConversationId = response.data.new_message.conversation_id;
+            // Пробуем различные форматы ответа от amoCRM
+            // Формат 1: { new_message: { conversation_id: "uuid", ... } }
+            // Формат 2: { conversation_id: "uuid", ... }
+            // Формат 3: { id: "uuid", ... } (может быть conversation_id)
+            returnedConversationId = response.data.new_message?.conversation_id 
+              || response.data.conversation_id 
+              || response.data.id;
+            
+            // Используем phoneNumber который уже извлечен ранее (совпадает с тем, что используется для поиска)
+            if (returnedConversationId && phoneNumber && phoneNumber.length > 0) {
               // Сохраняем conversation_id в БД для последующих сообщений
-              if (returnedConversationId) {
-                saveConversationId(this.accountId, phoneNum, returnedConversationId);
-              }
+              saveConversationId(this.accountId, phoneNumber, returnedConversationId);
               logger.info(
-                { accountId: this.accountId, phoneNumber: phoneNum, conversationId: returnedConversationId },
+                { 
+                  accountId: this.accountId, 
+                  phoneNumber, 
+                  conversationId: returnedConversationId,
+                  responseFormat: response.data.new_message?.conversation_id ? 'new_message.conversation_id' 
+                    : response.data.conversation_id ? 'conversation_id' 
+                    : response.data.id ? 'id' 
+                    : 'unknown'
+                },
                 '💾 Conversation ID сохранен для последующих сообщений'
+              );
+            } else if (!returnedConversationId) {
+              logger.debug(
+                { 
+                  accountId: this.accountId, 
+                  phoneNumber,
+                  responseData: response.data,
+                  hasNewMessage: !!response.data.new_message,
+                  hasConversationId: !!response.data.conversation_id,
+                  hasId: !!response.data.id
+                },
+                '⚠️ Conversation ID не найден в ответе от amoCRM'
               );
             }
             
