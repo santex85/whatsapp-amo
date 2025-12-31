@@ -4,7 +4,8 @@
   "description": "Gateway service for WhatsApp and amoCRM integration",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy:views",
+    "copy:views": "mkdir -p dist/web/views && cp -r src/web/views/*.html dist/web/views/",
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "dev:with-redis": "./scripts/start-redis.sh && npm run dev",
