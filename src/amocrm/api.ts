@@ -5,7 +5,7 @@ import { AmoCRMOAuth } from './oauth';
 import logger from '../utils/logger';
 import { AmoCRMError } from '../utils/errors';
 import { AmoCRMSendMessageRequest, AmoCRMChatMessage } from './types';
-import { getAmoCRMTokens } from '../database/sqlite';
+import { getAmoCRMTokens, saveConversationId, getConversationId } from '../database/sqlite';
 
 export class AmoCRMAPI {
   private accountId: string;
@@ -467,12 +467,22 @@ export class AmoCRMAPI {
 
       // Нормализуем chatId
       const normalizedChatId = chatId.split('-')[0].split('@')[0];
+      const phoneNumber = normalizedChatId.replace(/[^0-9]/g, '');
+      
+      // Пытаемся получить сохраненный conversation_id из БД
+      const savedConversationId = getConversationId(this.accountId, phoneNumber);
+      // Используем сохраненный conversation_id, если есть, иначе используем номер телефона
+      const conversationIdToUse = savedConversationId || normalizedChatId;
+      
       // #region agent log
       logger.info(
         { 
           accountId: this.accountId, 
           originalChatId: chatId, 
-          normalizedChatId, 
+          normalizedChatId,
+          phoneNumber,
+          savedConversationId,
+          conversationIdToUse,
           scopeId: finalScopeId, 
           content,
           scopeIdLength: finalScopeId?.length,
@@ -492,7 +502,7 @@ export class AmoCRMAPI {
           event_type: 'new_message',
           payload: {
             msgid: options?.uniq || `wa_${Date.now()}`,
-            conversation_id: normalizedChatId,
+            conversation_id: conversationIdToUse,
             timestamp: Math.floor(Date.now() / 1000),
             sender: {
               id: normalizedChatId,
@@ -666,8 +676,23 @@ export class AmoCRMAPI {
             payloadFormat: payloadFormatName,
           };
           
-          // Добавляем информацию о созданном лиде/чате, если есть
+          // Сохраняем conversation_id из ответа, если есть
+          let returnedConversationId: string | undefined;
           if (response.data && typeof response.data === 'object') {
+            // Формат ответа: { new_message: { conversation_id: "uuid", ... } }
+            const phoneNum = normalizedChatId.replace(/[^0-9]/g, '');
+            if (response.data.new_message?.conversation_id && phoneNum && phoneNum.length > 0) {
+              returnedConversationId = response.data.new_message.conversation_id;
+              // Сохраняем conversation_id в БД для последующих сообщений
+              if (returnedConversationId) {
+                saveConversationId(this.accountId, phoneNum, returnedConversationId);
+              }
+              logger.info(
+                { accountId: this.accountId, phoneNumber: phoneNum, conversationId: returnedConversationId },
+                '💾 Conversation ID сохранен для последующих сообщений'
+              );
+            }
+            
             if (response.data.lead_id) {
               responseInfo.leadId = response.data.lead_id;
               logger.info(

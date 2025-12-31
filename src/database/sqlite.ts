@@ -51,7 +51,18 @@ export function initDatabase(): DatabaseType {
       updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
     );
 
+    CREATE TABLE IF NOT EXISTS amocrm_conversations (
+      account_id TEXT NOT NULL,
+      phone_number TEXT NOT NULL,
+      conversation_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+      updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+      PRIMARY KEY (account_id, phone_number),
+      FOREIGN KEY (account_id) REFERENCES amocrm_tokens(account_id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_amocrm_tokens_expires_at ON amocrm_tokens(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_amocrm_conversations_lookup ON amocrm_conversations(account_id, phone_number);
   `);
 
   // Миграция: добавляем колонку scope_id если её нет
@@ -325,5 +336,39 @@ export function hasUsers(): boolean {
   const db = getDatabase();
   const row = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number } | undefined;
   return (row?.count || 0) > 0;
+}
+
+/**
+ * Сохраняет или обновляет conversation_id для аккаунта и номера телефона
+ * @param accountId - ID аккаунта WhatsApp
+ * @param phoneNumber - номер телефона
+ * @param conversationId - conversation_id из amoCRM
+ */
+export function saveConversationId(accountId: string, phoneNumber: string, conversationId: string): void {
+  const db = getDatabase();
+  db.prepare(`
+    INSERT INTO amocrm_conversations (account_id, phone_number, conversation_id, updated_at)
+    VALUES (?, ?, ?, strftime('%s', 'now'))
+    ON CONFLICT(account_id, phone_number) DO UPDATE SET
+      conversation_id = excluded.conversation_id,
+      updated_at = strftime('%s', 'now')
+  `).run(accountId, phoneNumber, conversationId);
+  logger.debug({ accountId, phoneNumber, conversationId }, 'Conversation ID saved');
+}
+
+/**
+ * Получает conversation_id для аккаунта и номера телефона
+ * @param accountId - ID аккаунта WhatsApp
+ * @param phoneNumber - номер телефона
+ * @returns conversation_id или null если не найден
+ */
+export function getConversationId(accountId: string, phoneNumber: string): string | null {
+  const db = getDatabase();
+  const row = db.prepare(`
+    SELECT conversation_id FROM amocrm_conversations
+    WHERE account_id = ? AND phone_number = ?
+    LIMIT 1
+  `).get(accountId, phoneNumber) as { conversation_id: string } | undefined;
+  return row?.conversation_id || null;
 }
 
