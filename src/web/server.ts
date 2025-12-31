@@ -202,11 +202,10 @@ export function createWebServer(
   // Защищенные маршруты (требуют авторизации)
   // Применяем requireAuth ко всем GET маршрутам кроме исключений
   app.use((req, res, next) => {
-    // Исключения: API JSON endpoints, webhook, login, OAuth callback, health (HTML и JSON)
+    // Исключения: API JSON endpoints, webhook, login, OAuth callback
     if (
       req.path.startsWith('/location/') ||
       req.path === '/login' ||
-      req.path === '/health' || // Health страница доступна без авторизации
       req.path.startsWith('/auth/amocrm/')
     ) {
       return next();
@@ -214,6 +213,11 @@ export function createWebServer(
     
     // Для JSON API endpoints (с явным Accept: application/json) не требуем авторизации
     if (req.path.startsWith('/api/') && req.get('Accept')?.includes('application/json')) {
+      return next();
+    }
+    
+    // Для health с JSON не требуем авторизации (для API совместимости)
+    if (req.path === '/health' && req.get('Accept')?.includes('application/json')) {
       return next();
     }
     
