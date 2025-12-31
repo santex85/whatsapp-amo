@@ -213,8 +213,10 @@
                     Загрузка логов...
                 </div>
             </div>
-            <a href="/" class="btn">← Назад</a>
-            <button class="btn" onclick="toggleLogs()" style="margin-left: 10px; background: #667eea;">📋 Показать логи</button>
+            <div style="margin-top: 20px; display: flex; gap: 10px;">
+                <a href="/" class="btn">← Назад</a>
+                <button class="btn" onclick="toggleLogs()" style="background: #667eea;">📋 Показать логи</button>
+            </div>
         </div>
     </div>
 
@@ -233,6 +235,10 @@
                 }
                 
                 const data = await response.json();
+                
+                // Отладочный вывод в консоль
+                console.log('Health data received:', data);
+                console.log('SyncHistory:', data.syncHistory);
                 
                 const date = new Date(data.timestamp);
                 const timeString = date.toLocaleString('ru-RU', {
@@ -317,11 +323,11 @@
                             <span class="status-value ${data.summary.amocrmConfigured === data.summary.totalAccounts ? 'status-ok' : 'status-warning'}">${data.summary.amocrmConfigured} / ${data.summary.totalAccounts}</span>
                         </div>
                         ` : ''}
-                        <div class="status-item" style="border: 2px solid ${data.syncHistory && data.syncHistory.enabled ? '#4CAF50' : '#999'};">
+                        <div class="status-item" style="border: 2px solid ${(data.syncHistory && data.syncHistory.enabled) ? '#4CAF50' : '#999'};">
                             <span class="status-label">📥 Синхронизация истории WhatsApp</span>
                             <label style="cursor: pointer; display: flex; align-items: center; gap: 10px;">
-                                <span class="status-value ${data.syncHistory && data.syncHistory.enabled ? 'status-ok' : ''}">${data.syncHistory && data.syncHistory.enabled ? '✅ Включена' : '❌ Выключена'}</span>
-                                <input type="checkbox" id="syncHistoryToggle" ${data.syncHistory && data.syncHistory.enabled ? 'checked' : ''} onchange="toggleSyncHistory(this.checked)" style="width: 40px; height: 20px; cursor: pointer;">
+                                <span class="status-value ${(data.syncHistory && data.syncHistory.enabled) ? 'status-ok' : ''}">${(data.syncHistory && data.syncHistory.enabled) ? '✅ Включена' : '❌ Выключена'}</span>
+                                <input type="checkbox" id="syncHistoryToggle" ${(data.syncHistory && data.syncHistory.enabled) ? 'checked' : ''} onchange="toggleSyncHistory(this.checked)" style="width: 40px; height: 20px; cursor: pointer;">
                             </label>
                         </div>
                     </div>
