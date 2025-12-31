@@ -437,7 +437,27 @@ export function createWebServer(
         });
       } catch (err) {
         logger.error({ err }, 'Failed to get health status');
-        res.json({ status: 'ok', timestamp: new Date().toISOString() });
+        // В случае ошибки все равно возвращаем syncHistory с дефолтным значением
+        try {
+          const { getSyncHistoryEnabled } = await import('../database/sqlite');
+          const syncHistoryEnabled = getSyncHistoryEnabled();
+          res.json({ 
+            status: 'ok', 
+            timestamp: new Date().toISOString(),
+            syncHistory: {
+              enabled: syncHistoryEnabled,
+            }
+          });
+        } catch (syncErr) {
+          logger.error({ err: syncErr }, 'Failed to get sync history status in error handler');
+          res.json({ 
+            status: 'ok', 
+            timestamp: new Date().toISOString(),
+            syncHistory: {
+              enabled: false,
+            }
+          });
+        }
       }
       return;
     }
