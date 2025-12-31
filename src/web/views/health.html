@@ -337,6 +337,20 @@
                     ${accountsHtml}
                 `;
                 
+                // Проверяем, что элементы созданы (для отладки)
+                setTimeout(() => {
+                    const syncToggle = document.getElementById('syncHistoryToggle');
+                    const logsContainer = document.getElementById('logsContainer');
+                    const logsBtn = document.querySelector('button[onclick="toggleLogs()"]');
+                    console.log('Elements check after render:', {
+                        syncToggle: !!syncToggle,
+                        logsContainer: !!logsContainer,
+                        logsBtn: !!logsBtn,
+                        container: !!container,
+                        containerHTML: container.innerHTML.substring(0, 200)
+                    });
+                }, 100);
+                
             } catch (err) {
                 container.innerHTML = `
                     <div style="color: #f44336; text-align: center;">
