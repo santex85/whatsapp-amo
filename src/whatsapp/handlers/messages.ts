@@ -38,8 +38,6 @@ export function setupMessageHandler(
     // notify - новые сообщения
     // append - сообщения из истории
     if (type === 'notify' || type === 'append') {
-      console.log(`[DEBUG] ✅ Тип ${type} - обрабатываем ${messages.length} сообщений`);
-      
       // Для сообщений из истории (append) пропускаем старые сообщения (старше 1 часа)
       // чтобы не дублировать их в amoCRM
       const historySyncThreshold = 60 * 60 * 1000; // 1 час
