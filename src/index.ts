@@ -2,6 +2,32 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+// Перехватываем stderr для фильтрации безопасных ошибок от libsignal
+// Bad MAC ошибки нормальны для Signal Protocol и обрабатываются автоматически
+const originalStderrWrite = process.stderr.write.bind(process.stderr);
+const filteredErrors = [
+  'Bad MAC',
+  'Session error:Error: Bad MAC',
+  'at Object.verifyMAC',
+  'at SessionCipher.doDecryptWhisperMessage',
+  'at async SessionCipher.decryptWithSessions',
+  'at async _asyncQueueExecutor',
+  'Closing open session in favor of incoming prekey bundle',
+];
+
+process.stderr.write = function(chunk: any, encoding?: any, callback?: any): boolean {
+  if (typeof chunk === 'string' || Buffer.isBuffer(chunk)) {
+    const message = chunk.toString();
+    // Фильтруем безопасные ошибки от libsignal
+    if (filteredErrors.some(error => message.includes(error))) {
+      // Подавляем эти ошибки, так как они нормальны для WhatsApp Signal Protocol
+      return true;
+    }
+  }
+  // Для всех остальных сообщений используем оригинальный stderr
+  return originalStderrWrite(chunk, encoding, callback);
+};
+
 import { initDatabase, initDefaultAdmin } from './database/sqlite';
 import { WhatsAppManager } from './whatsapp/manager';
 import { getQueue } from './queue/redis';
