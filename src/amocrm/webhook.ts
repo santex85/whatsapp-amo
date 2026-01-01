@@ -16,15 +16,18 @@ export function validateWebhookRequest(req: Request): AmoCRMWebhookPayload {
   }
 
   // amoCRM отправляет данные в формате:
-  // { account_id, message: { receiver: { phone, client_id }, message: { text } } }
-  // Преобразуем в наш формат: { account_id, chat_id, message: { content } }
+  // { account_id, message: { receiver: { phone, client_id }, conversation: { id }, message: { text } } }
+  // Преобразуем в наш формат: { account_id, chat_id, conversation_id?, message: { content } }
   
   let chat_id: string;
   let content: string;
+  let conversation_id: string | undefined;
 
   // Проверяем новый формат (с receiver и message.message.text)
   if (message.receiver && message.receiver.phone) {
     chat_id = message.receiver.phone;
+    // Извлекаем conversation_id если есть
+    conversation_id = message.conversation?.id || req.body.conversation_id;
     // Проверяем наличие текста в message.message.text
     if (message.message && message.message.text) {
       content = message.message.text;
@@ -35,6 +38,7 @@ export function validateWebhookRequest(req: Request): AmoCRMWebhookPayload {
   // Проверяем старый формат (для обратной совместимости)
   else if (req.body.chat_id && message.content) {
     chat_id = req.body.chat_id;
+    conversation_id = req.body.conversation_id;
     content = message.content;
   } else {
     throw new AmoCRMError('Missing required fields: chat_id/receiver.phone or message.content/message.message.text', 'INVALID_REQUEST', 400);
@@ -44,6 +48,7 @@ export function validateWebhookRequest(req: Request): AmoCRMWebhookPayload {
   return {
     account_id,
     chat_id,
+    conversation_id,
     message: {
       content,
       attachments: message.message?.media ? [{

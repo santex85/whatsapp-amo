@@ -163,6 +163,7 @@ export function createWebServer(
           scopeId, 
           accountId, 
           chatId: webhookPayload.chat_id,
+          conversationId: webhookPayload.conversation_id || 'не указан',
           hasAttachments: !!webhookPayload.message.attachments?.length,
           messageLength: webhookPayload.message.content?.length || 0,
           messagePreview: webhookPayload.message.content?.substring(0, 50)

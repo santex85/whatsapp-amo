@@ -52,7 +52,7 @@ console.log('[START] Приложение запускается (console.log)\n
 
 import { config } from './config';
 import { amocrmConfig } from './config/amocrm';
-import { getAmoCRMTokens } from './database/sqlite';
+import { getAmoCRMTokens, saveConversationId } from './database/sqlite';
 import logger from './utils/logger';
 import { IncomingMessage } from './whatsapp/handlers/messages';
 
@@ -169,6 +169,20 @@ async function handleOutgoingMessage(payload: AmoCRMWebhookPayload): Promise<voi
       throw new Error(`Invalid chat_id format: ${payload.chat_id}. Cannot extract phone number.`);
     }
     
+    // Сохраняем conversation_id из webhook payload, если он есть
+    // Это важно для группировки сообщений в одну заявку в amoCRM
+    if (payload.conversation_id && phoneNumber) {
+      saveConversationId(payload.account_id, phoneNumber, payload.conversation_id);
+      logger.info(
+        { 
+          accountId: payload.account_id, 
+          phoneNumber, 
+          conversationId: payload.conversation_id 
+        },
+        '💾 Conversation ID сохранен из webhook payload'
+      );
+    }
+    
     // Формируем адрес WhatsApp
     const to = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net`;
 
@@ -268,12 +282,30 @@ queueProcessor.registerProcessor('incoming', async (message: QueueMessage) => {
       }
     }
 
+    // Нормализуем phoneNumber: убираем все нецифровые символы для единообразия
+    // Это важно для корректной работы с conversation_id
+    const normalizedPhoneNumber = data.phoneNumber.replace(/[^0-9]/g, '');
+    
+    if (!normalizedPhoneNumber || normalizedPhoneNumber.length === 0) {
+      logger.error({ accountId: message.accountId, originalPhoneNumber: data.phoneNumber }, '❌ Не удалось нормализовать номер телефона');
+      throw new Error(`Invalid phone number: ${data.phoneNumber}`);
+    }
+    
     // Отправка в amoCRM
     // Если есть медиа, но нет текста, используем placeholder
     const messageText = data.message || (mediaUrl ? '📎 Медиафайл' : '');
     
+    logger.debug(
+      { 
+        accountId: message.accountId, 
+        originalPhoneNumber: data.phoneNumber, 
+        normalizedPhoneNumber 
+      }, 
+      '📤 Отправка сообщения в amoCRM с нормализованным номером'
+    );
+    
     await amocrmAPI.sendMessage(
-      data.phoneNumber, // chat_id в amoCRM
+      normalizedPhoneNumber, // Используем нормализованный номер для поиска conversation_id
       messageText,
       {
         uniq: `wa_${data.timestamp}`,

@@ -30,6 +30,7 @@ export interface AmoCRMSendMessageRequest {
 export interface AmoCRMWebhookPayload {
   account_id: string;
   chat_id: string;
+  conversation_id?: string; // ID существующей беседы в amoCRM
   message: {
     content: string;
     attachments?: Array<{

@@ -93,7 +93,8 @@ export function setupMessageHandler(
           }
 
           const from = msg.key.remoteJid || '';
-          const phoneNumber = from.split('@')[0];
+          // Нормализуем phoneNumber: убираем все нецифровые символы для единообразия
+          const phoneNumber = from.split('@')[0].replace(/[^0-9]/g, '');
           const pushName = msg.pushName || null;
 
           // Обрабатываем медиафайлы
