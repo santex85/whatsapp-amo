@@ -2,9 +2,11 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Перехватываем stderr для фильтрации безопасных ошибок от libsignal
-// Bad MAC ошибки нормальны для Signal Protocol и обрабатываются автоматически
+// Перехватываем stderr и stdout для фильтрации неважных сообщений
 const originalStderrWrite = process.stderr.write.bind(process.stderr);
+const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+
+// Фильтры для подавления неважных сообщений
 const filteredErrors = [
   'Bad MAC',
   'Session error:Error: Bad MAC',
@@ -12,20 +14,52 @@ const filteredErrors = [
   'at SessionCipher.doDecryptWhisperMessage',
   'at async SessionCipher.decryptWithSessions',
   'at async _asyncQueueExecutor',
+  'at async 182909805834253',
   'Closing open session in favor of incoming prekey bundle',
+  'MemoryStore is not designed for a production',
 ];
 
+const filteredWarnings = [
+  '[START] Приложение запускается',
+];
+
+// Перехватываем stderr
 process.stderr.write = function(chunk: any, encoding?: any, callback?: any): boolean {
   if (typeof chunk === 'string' || Buffer.isBuffer(chunk)) {
     const message = chunk.toString();
-    // Фильтруем безопасные ошибки от libsignal
-    if (filteredErrors.some(error => message.includes(error))) {
-      // Подавляем эти ошибки, так как они нормальны для WhatsApp Signal Protocol
+    // Фильтруем безопасные ошибки от libsignal и неважные предупреждения
+    if (filteredErrors.some(error => message.includes(error)) || 
+        filteredWarnings.some(warning => message.includes(warning))) {
+      // Подавляем эти сообщения
       return true;
     }
   }
   // Для всех остальных сообщений используем оригинальный stderr
   return originalStderrWrite(chunk, encoding, callback);
+};
+
+// Перехватываем stdout для фильтрации неважных сообщений
+process.stdout.write = function(chunk: any, encoding?: any, callback?: any): boolean {
+  if (typeof chunk === 'string' || Buffer.isBuffer(chunk)) {
+    const message = chunk.toString();
+    // Фильтруем отладочные сообщения
+    if (filteredWarnings.some(warning => message.includes(warning)) ||
+        message.includes('[DEBUG]') ||
+        message.includes('[START] Приложение запускается')) {
+      return true;
+    }
+  }
+  return originalStdoutWrite(chunk, encoding, callback);
+};
+
+// Перехватываем console.error для фильтрации
+const originalConsoleError = console.error.bind(console);
+console.error = function(...args: any[]): void {
+  const message = args.map(arg => String(arg)).join(' ');
+  // Фильтруем Bad MAC ошибки и другие неважные сообщения
+  if (!filteredErrors.some(error => message.includes(error))) {
+    originalConsoleError(...args);
+  }
 };
 
 import { initDatabase, initDefaultAdmin } from './database/sqlite';
@@ -42,13 +76,7 @@ import { MediaUploader } from './media/uploader';
 import { randomDelay } from './anti-ban/delay';
 import { simulateTyping } from './anti-ban/typing';
 import { messageRateLimiter } from './anti-ban/rate-limiter';
-// Принудительный вывод для отладки - ВСЕГДА видимый
-console.log('\n╔══════════════════════════════════════════════════════╗');
-console.log('║  🚀 WhatsApp-amoCRM Gateway запускается...          ║');
-console.log('╚══════════════════════════════════════════════════════╝\n');
-process.stdout.write('[START] Приложение запускается (stdout)\n');
-process.stderr.write('[START] Приложение запускается (stderr)\n');
-console.log('[START] Приложение запускается (console.log)\n');
+// Важное сообщение о запуске (через logger, чтобы подчинялось уровню логирования)
 
 import { config } from './config';
 import { amocrmConfig } from './config/amocrm';
@@ -78,15 +106,11 @@ async function handleIncomingMessage(message: IncomingMessage): Promise<void> {
   try {
     // Пропускаем групповые чаты - они не должны попадать в amoCRM
     if (message.isGroup) {
-      console.log(`[DEBUG] ⏭️ Пропущено групповое сообщение от ${message.phoneNumber} (аккаунт: ${message.accountId})`);
-      logger.info({ accountId: message.accountId, from: message.phoneNumber }, '⏭️ Пропущено групповое сообщение - не отправляется в amoCRM');
+      logger.debug({ accountId: message.accountId, from: message.phoneNumber }, '⏭️ Пропущено групповое сообщение - не отправляется в amoCRM');
       return;
     }
 
-    // Явный вывод для отладки - используем и stdout, и console.log
-    process.stdout.write(`\n[DEBUG] 📥 Получено сообщение от ${message.phoneNumber} для аккаунта ${message.accountId}\n`);
-    console.log(`[DEBUG] 📥 Получено сообщение от ${message.phoneNumber} для аккаунта ${message.accountId}`);
-    logger.info({ accountId: message.accountId, from: message.phoneNumber, hasMedia: !!message.mediaType }, '📥 Обработка входящего сообщения');
+    logger.info({ accountId: message.accountId, from: message.phoneNumber, hasMedia: !!message.mediaType }, '📥 Получено входящее сообщение');
 
     // Скачиваем медиафайлы сразу, если они есть
     let mediaFilePath: string | undefined;
@@ -232,21 +256,17 @@ queueProcessor.registerProcessor('incoming', async (message: QueueMessage) => {
   
   // Дополнительная проверка: пропускаем групповые чаты (по адресу from, который содержит @g.us для групп)
   if (data.from?.endsWith('@g.us')) {
-    console.log(`[DEBUG] ⏭️ Пропущено групповое сообщение из очереди: ${data.from} (аккаунт: ${message.accountId})`);
-    logger.info({ accountId: message.accountId, from: data.from }, '⏭️ Пропущено групповое сообщение из очереди - не отправляется в amoCRM');
+    logger.debug({ accountId: message.accountId, from: data.from }, '⏭️ Пропущено групповое сообщение из очереди - не отправляется в amoCRM');
     return;
   }
   
-  // Явный вывод для отладки
-  console.log(`[DEBUG] 🔄 Обработка сообщения из очереди: ${data.phoneNumber} (аккаунт: ${message.accountId}), текст: "${data.message?.substring(0, 50) || '(нет текста)'}", медиа: ${data.mediaType || 'нет'}`);
   logger.info({ 
     accountId: message.accountId, 
     phoneNumber: data.phoneNumber, 
     hasMessage: !!data.message,
     messagePreview: data.message?.substring(0, 100),
-    hasMedia: !!data.mediaType,
-    mediaType: data.mediaType
-  }, '🔄 Обработка входящего сообщения из очереди');
+    hasMedia: !!data.mediaType
+  }, '🔄 Обработка сообщения из очереди');
   
   // Anti-ban: случайная задержка
   await randomDelay();
@@ -256,8 +276,7 @@ queueProcessor.registerProcessor('incoming', async (message: QueueMessage) => {
   const subdomain = tokens?.subdomain || amocrmConfig.subdomain || 'your_subdomain';
   
   if (!tokens) {
-    console.log(`[DEBUG] ⚠️ Нет токенов amoCRM для аккаунта ${message.accountId}`);
-    logger.warn({ accountId: message.accountId }, 'No amoCRM tokens found, skipping message');
+    logger.warn({ accountId: message.accountId }, '⚠️ Нет токенов amoCRM для аккаунта, пропускаем сообщение');
     return;
   }
 
@@ -313,7 +332,6 @@ queueProcessor.registerProcessor('incoming', async (message: QueueMessage) => {
       }
     );
 
-    console.log(`[DEBUG] ✅ Сообщение отправлено в amoCRM: ${data.phoneNumber}, текст: "${messageText.substring(0, 50)}", медиа: ${mediaUrl ? 'да' : 'нет'}`);
     logger.info({ 
       accountId: message.accountId, 
       phoneNumber: data.phoneNumber, 
@@ -332,10 +350,8 @@ queueProcessor.registerProcessor('outgoing', async (message: QueueMessage) => {
   logger.info({ 
     accountId: message.accountId, 
     to: data.to,
-    messagePreview: data.message?.substring(0, 50),
-    queueMessageId: message.id
-  }, '🔄 Начало обработки исходящего сообщения из очереди');
-  console.log(`[DEBUG] 🔄 Обработка исходящего сообщения из очереди: account=${message.accountId}, to=${data.to}`);
+    messagePreview: data.message?.substring(0, 50)
+  }, '🔄 Обработка исходящего сообщения из очереди');
 
   // Anti-ban: проверка rate limit
   if (!(await messageRateLimiter.checkLimit(message.accountId))) {
@@ -398,28 +414,21 @@ queueProcessor.registerProcessor('outgoing', async (message: QueueMessage) => {
 
 // Подключение обработчиков WhatsApp
 manager.on('message', (message: IncomingMessage) => {
-  process.stdout.write(`\n[DEBUG] 📬 Manager получил событие message для аккаунта ${message.accountId}\n`);
-  console.log(`[DEBUG] 📬 Manager получил событие message для аккаунта ${message.accountId}`);
   handleIncomingMessage(message).catch((err) => {
-    process.stderr.write(`\n[DEBUG] ❌ Ошибка обработки сообщения: ${err}\n`);
-    console.error(`[DEBUG] ❌ Ошибка обработки сообщения:`, err);
-    logger.error({ err }, 'Error handling incoming message');
+    logger.error({ err, accountId: message.accountId }, '❌ Ошибка обработки входящего сообщения');
   });
 });
 
-// Добавляем логи для всех событий менеджера
+// Логирование важных событий
 manager.on('connected', ({ accountId }) => {
-  console.log(`[DEBUG] ✅ Аккаунт ${accountId} подключен к WhatsApp`);
   logger.info({ accountId }, '✅ WhatsApp аккаунт подключен');
 });
 
 manager.on('disconnected', ({ accountId, reason }) => {
-  console.log(`[DEBUG] ❌ Аккаунт ${accountId} отключен: ${reason}`);
   logger.warn({ accountId, reason }, '⚠️ WhatsApp аккаунт отключен');
 });
 
 manager.on('qr', ({ accountId }) => {
-  console.log(`[DEBUG] 📱 QR код получен для аккаунта ${accountId}`);
   logger.info({ accountId }, '📱 QR код получен');
 });
 
@@ -429,18 +438,15 @@ const app = createWebServer(manager, handleOutgoingMessage);
 // Запуск приложения
 async function start() {
   try {
-    // Принудительный вывод для отладки
-    console.log('🚀 Запуск приложения...');
-    process.stdout.write('[APP] Запуск приложения (stdout)\n');
     logger.info('🚀 Запуск приложения...');
+    
     // Подключение к Redis
-    console.log('📦 Подключение к Redis...');
+    logger.debug('📦 Подключение к Redis...');
     await queue.connect();
-    console.log('✅ Подключен к Redis');
     logger.info('✅ Подключен к Redis');
 
     // Восстановление аккаунтов из сохраненных сессий
-    console.log('🔄 Восстановление аккаунтов из сохраненных сессий...');
+    logger.debug('🔄 Восстановление аккаунтов из сохраненных сессий...');
     try {
       const { promises: fsPromises } = await import('fs');
       const sessionsDir = './storage/sessions';
@@ -463,9 +469,8 @@ async function start() {
     }
 
     // Запуск обработчика очереди
-    console.log('🔄 Запуск обработчика очереди...');
+    logger.debug('🔄 Запуск обработчика очереди...');
     await queueProcessor.start();
-    console.log('✅ Обработчик очереди запущен');
     logger.info('✅ Обработчик очереди запущен');
 
     // Запуск веб-сервера

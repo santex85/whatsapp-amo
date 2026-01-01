@@ -32,9 +32,7 @@ export function setupMessageHandler(
   callbacks: MessageHandlerCallbacks
 ) {
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    // Используем process.stdout.write для гарантированного вывода
-    process.stdout.write(`\n[DEBUG] 📬 messages.upsert событие: type=${type}, messages=${messages.length}\n`);
-    console.log(`[DEBUG] 📬 messages.upsert событие: type=${type}, messages=${messages.length}`);
+    logger.debug({ accountId, type, messageCount: messages.length }, '📬 messages.upsert событие');
     
     // Обрабатываем все типы, не только notify
     // notify - новые сообщения
@@ -54,16 +52,14 @@ export function setupMessageHandler(
             const messageTimestamp = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : 0;
             const messageAge = now - messageTimestamp;
             if (messageAge > historySyncThreshold) {
-              console.log(`[DEBUG] ⏭️ Пропущено: старое сообщение из истории (возраст: ${Math.round(messageAge / 1000 / 60)} минут)`);
+              logger.debug({ accountId, messageId: msg.key.id, ageMinutes: Math.round(messageAge / 1000 / 60) }, '⏭️ Пропущено старое сообщение из истории');
               continue;
             }
           }
           
-          console.log(`[DEBUG] 🔍 Обработка сообщения: from=${msg.key.remoteJid}, fromMe=${msg.key.fromMe}`);
-          
           // Пропускаем сообщения, которые мы сами отправили (fromMe === true)
           if (msg.key.fromMe) {
-            console.log(`[DEBUG] ⏭️ Пропущено: собственное отправленное сообщение (fromMe=true)`);
+            logger.debug({ accountId, messageId: msg.key.id }, '⏭️ Пропущено собственное отправленное сообщение');
             continue;
           }
           
@@ -73,22 +69,21 @@ export function setupMessageHandler(
           // Пропускаем статусы
           const isStatus = msg.key.remoteJid === 'status@broadcast';
           if (isStatus) {
-            console.log(`[DEBUG] ⏭️ Пропущено: статусное сообщение`);
+            logger.debug({ accountId, messageId: msg.key.id }, '⏭️ Пропущено статусное сообщение');
             continue;
           }
 
           // Пропускаем сообщения о наборе текста и других статусных событиях
           const messageContent = msg.message;
           if (!messageContent) {
-            console.log(`[DEBUG] ⏭️ Пропущено: нет содержимого сообщения`);
+            logger.debug({ accountId, messageId: msg.key.id }, '⏭️ Пропущено сообщение без содержимого');
             continue;
           }
 
           // Проверяем, не является ли это служебным сообщением
           const messageType = getContentType(messageContent);
-          console.log(`[DEBUG] 📋 Тип сообщения: ${messageType}`);
           if (messageType === 'protocolMessage' || messageType === 'senderKeyDistributionMessage') {
-            console.log(`[DEBUG] ⏭️ Пропущено: служебное сообщение (${messageType})`);
+            logger.debug({ accountId, messageId: msg.key.id, messageType }, '⏭️ Пропущено служебное сообщение');
             continue;
           }
 
@@ -146,9 +141,6 @@ export function setupMessageHandler(
             originalMessage: msg, // Сохраняем оригинальное сообщение для медиа
           };
 
-          // Явный вывод для отладки
-          console.log(`[DEBUG] 📨 Входящее сообщение от ${phoneNumber} (аккаунт: ${accountId}), текст: "${messageText?.substring(0, 50)}..."`);
-          
           logger.info(
             { 
               accountId, 
@@ -161,16 +153,13 @@ export function setupMessageHandler(
             '📨 Входящее сообщение'
           );
 
-          console.log(`[DEBUG] 📤 Вызываем callback onMessage для аккаунта ${accountId}`);
           callbacks.onMessage(incomingMessage);
-          console.log(`[DEBUG] ✅ Callback onMessage выполнен`);
         } catch (err) {
-          console.error(`[DEBUG] ❌ Ошибка обработки сообщения:`, err);
-          logger.error({ err, accountId, messageId: msg.key.id }, 'Error processing message');
+          logger.error({ err, accountId, messageId: msg.key.id }, '❌ Ошибка обработки сообщения');
         }
       }
     } else {
-      console.log(`[DEBUG] ⏭️ Пропущено: тип события ${type} (не notify)`);
+      logger.debug({ accountId, type, messageCount: messages.length }, '⏭️ Пропущено: тип события не notify');
     }
   });
 

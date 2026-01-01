@@ -97,12 +97,11 @@ export class WhatsAppClient {
 
       setupMessageHandler(this.sock, this.accountId, {
         onMessage: (message) => {
-          console.log(`[DEBUG] 📨 Client получил сообщение, передаем в callback для аккаунта ${this.accountId}`);
-          if (this.callbacks.onMessage) {
-            this.callbacks.onMessage(message);
-          } else {
-            console.log(`[DEBUG] ⚠️ Callback onMessage не установлен для аккаунта ${this.accountId}`);
-          }
+        if (this.callbacks.onMessage) {
+          this.callbacks.onMessage(message);
+        } else {
+          logger.warn({ accountId: this.accountId }, '⚠️ Callback onMessage не установлен');
+        }
         },
       });
 
